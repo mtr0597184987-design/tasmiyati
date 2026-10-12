@@ -1,0 +1,24 @@
+# نشر «تسمياتي» على Render.
+# فترة التحكيم: الخطة المجانية (plan: free) مع قاعدة Turso المجانية لحفظ البيانات بصورة دائمة.
+# التطبيق الفعلي: غيّري نوع الخادم من لوحة Render إلى Starter المدفوع؛ تبقى البيانات في Turso كما هي.
+services:
+  - type: web
+    name: tasmiyati
+    runtime: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: "22.14.0"
+      - key: TEACHER_PASSWORD
+        sync: false
+      - key: TURSO_DATABASE_URL
+        sync: false
+      - key: TURSO_AUTH_TOKEN
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: SESSION_SECRET
+        generateValue: true
