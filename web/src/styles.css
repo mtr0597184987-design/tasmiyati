@@ -514,6 +514,23 @@ details.box + details.box { margin-top: 8px; }
   .kv { grid-template-columns: 1fr; }
   .model-card dl { grid-template-columns: 1fr; }
 }
+
+/* سلالم التقدير */
+.level-select { min-height: 36px; padding-block: 4px; min-width: 128px; font-size: .9rem; }
+.level-select.lv-4 { background: var(--ok-soft); border-color: var(--ok); }
+.level-select.lv-3 { background: var(--info-soft); border-color: var(--info); }
+.level-select.lv-2 { background: var(--accent-soft); border-color: var(--accent); }
+.level-select.lv-1, .level-select.lv-0 { background: var(--danger-soft); border-color: var(--danger); }
+.rating-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; }
+.rating-table td { vertical-align: middle; }
+.link-btn { background: none; border: 0; padding: 0; color: var(--primary); cursor: pointer; font: inherit; text-align: right; }
+.link-btn:hover { text-decoration: underline; }
+.danger-zone { border-color: var(--danger); }
+.mode-toggle { display: inline-flex; border: 1px solid var(--line-2); border-radius: 10px; overflow: hidden; }
+.mode-toggle button { border: 0; background: transparent; padding: 7px 14px; cursor: pointer; font: inherit; color: var(--ink-2); }
+.mode-toggle button[aria-pressed="true"] { background: var(--primary); color: #fff; }
+@media (max-width: 560px) { .rating-row { grid-template-columns: 1fr; } }
+
 @media print {
   .topbar, .footer-nav, .pane-assistant, .btn { display: none !important; }
 }

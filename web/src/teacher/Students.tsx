@@ -11,6 +11,8 @@ export function Students() {
   const [d, setD] = useState<any>(null);
   const [error, setError] = useState('');
   const [form, setForm] = useState({ count: 5, prefix: 'TS' });
+  const [mode, setMode] = useState<'names' | 'count'>('names');
+  const [namesText, setNamesText] = useState('');
   const [created, setCreated] = useState<any[]>([]);
   const [lessonId, setLessonId] = useState('');
   const load = () => api('/api/teacher/overview').then((r) => { setD(r); setLessonId((x) => x || r.lessons[0]?.id || ''); }).catch((e) => setError(e.message));
@@ -19,8 +21,10 @@ export function Students() {
   async function create(e: React.FormEvent) {
     e.preventDefault();
     try {
-      const r = await api<any>('/api/teacher/students', { body: form });
-      setCreated(r.created); toast(`أُنشئ ${r.created.length} رمزًا دراسيًا.`, 'ok'); load();
+      const names = namesText.split(/\r?\n/).map((x) => x.trim()).filter(Boolean);
+      if (mode === 'names' && !names.length) { toast('اكتبي اسمًا واحدًا على الأقل.', 'error'); return; }
+      const r = await api<any>('/api/teacher/students', { body: mode === 'names' ? { names, prefix: form.prefix } : form });
+      setCreated(r.created); setNamesText(''); toast(`أُنشئ ${r.created.length} رمزًا دراسيًا.`, 'ok'); load();
     } catch (err: any) { toast(err.message, 'error'); }
   }
 
@@ -63,7 +67,7 @@ export function Students() {
               <tbody>
                 {d.students.map((s: any) => (
                   <tr key={s.id}>
-                    <td className="nowrap"><b>{s.label}</b><div className="tiny muted ltr" style={{ textAlign: 'right' }}>{s.code}</div></td>
+                    <td className="nowrap"><b>{s.name || s.label}</b><div className="tiny muted" style={{ textAlign: 'right' }}>{s.name ? `${s.label} · ` : ''}<span className="ltr">{s.code}</span></div></td>
                     {lesson.activities.map((a: any) => {
                       const st = s.progress[lesson.id][a.id];
                       return <td key={a.id} className="cell"><span className={`dot ${st}`} title={`${a.title}: ${STATUS_LABEL[st]}`} aria-label={STATUS_LABEL[st]} /></td>;
@@ -82,20 +86,35 @@ export function Students() {
       </section>
 
       <section className="card">
-        <div className="card-title"><Icon name="plus" /> إنشاء رموز دراسية مستعارة</div>
-        <p className="small muted">لا يطلب التطبيق أسماء حقيقية. يُنشأ لكل طالبة رمز دخول واسم عرض مستعار (طالبة 01...). احتفظي بجدول الربط بين الرموز والطالبات خارج التطبيق وفق ضوابط مؤسستكِ.</p>
-        <form className="row" onSubmit={create}>
-          <label className="small">العدد <input className="input" type="number" min={1} max={60} style={{ width: 90 }} value={form.count} onChange={(e) => setForm({ ...form, count: Number(e.target.value) })} /></label>
-          <label className="small">بادئة الرمز <input className="input ltr" style={{ width: 100 }} value={form.prefix} onChange={(e) => setForm({ ...form, prefix: e.target.value })} /></label>
-          <button className="btn primary" style={{ alignSelf: 'flex-end' }}>إنشاء</button>
+        <div className="card-title"><Icon name="plus" /> إضافة طالبات</div>
+        <div className="mode-toggle" role="group" aria-label="طريقة الإضافة" style={{ marginBottom: 10 }}>
+          <button type="button" aria-pressed={mode === 'names'} onClick={() => setMode('names')}>بالأسماء</button>
+          <button type="button" aria-pressed={mode === 'count'} onClick={() => setMode('count')}>رموز مستعارة فقط</button>
+        </div>
+        {mode === 'names' ? (
+          <p className="small muted">اكتبي اسم كل طالبة في سطر مستقل، ويُنشأ لكل اسم رمز دخول. يظهر الاسم لكِ وللطالبة نفسها فقط، ولا يظهر لزميلاتها، ولا يُرسل إلى المساعد الذكي، ولا يدخل في ملفات التصدير إلا إذا اخترتِ ذلك.</p>
+        ) : (
+          <p className="small muted">يُنشأ لكل طالبة رمز دخول واسم عرض مستعار (طالبة 01...) دون أسماء. احتفظي بجدول الربط بين الرموز والطالبات خارج التطبيق. يمكنكِ إضافة الاسم لاحقًا من صفحة الطالبة.</p>
+        )}
+        <form className="stack" style={{ gap: 10 }} onSubmit={create}>
+          {mode === 'names' && (
+            <textarea className="textarea" style={{ minHeight: 140 }} placeholder={'سارة أحمد\nريم خالد\nنور محمد'} value={namesText} onChange={(e) => setNamesText(e.target.value)} aria-label="أسماء الطالبات، اسم في كل سطر" />
+          )}
+          <div className="row">
+            {mode === 'count' && <label className="small">العدد <input className="input" type="number" min={1} max={60} style={{ width: 90 }} value={form.count} onChange={(e) => setForm({ ...form, count: Number(e.target.value) })} /></label>}
+            <label className="small">بادئة الرمز <input className="input ltr" style={{ width: 100 }} value={form.prefix} onChange={(e) => setForm({ ...form, prefix: e.target.value })} /></label>
+            <button className="btn primary" style={{ alignSelf: 'flex-end' }}>
+              {mode === 'names' ? `إنشاء الرموز${namesText.trim() ? ` (${namesText.split(/\r?\n/).filter((x) => x.trim()).length})` : ''}` : 'إنشاء'}
+            </button>
+          </div>
         </form>
         {created.length > 0 && (
           <div style={{ marginTop: 12 }}>
             <Alert kind="ok">أُنشئت الرموز التالية. اطبعيها أو انسخيها ووزعيها على الطالبات.</Alert>
             <div className="codes" style={{ marginTop: 10 }}>
-              {created.map((c) => <div key={c.code} className="code-card"><div className="small muted">{c.label}</div><div className="code">{c.code}</div></div>)}
+              {created.map((c) => <div key={c.code} className="code-card"><div className="small muted">{c.name || c.label}</div><div className="code">{c.code}</div></div>)}
             </div>
-            <button className="btn sm" style={{ marginTop: 8 }} onClick={() => { navigator.clipboard?.writeText(created.map((c) => `${c.label}\t${c.code}`).join('\n')); toast('نُسخت الرموز.', 'ok'); }}>نسخ الكل</button>
+            <button className="btn sm" style={{ marginTop: 8 }} onClick={() => { navigator.clipboard?.writeText(created.map((c) => `${c.name || c.label}\t${c.code}`).join('\n')); toast('نُسخت الرموز.', 'ok'); }}>نسخ الكل</button>
           </div>
         )}
       </section>

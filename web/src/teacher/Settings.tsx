@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
 import { Icon } from '../icons';
-import { Alert, ErrorBox, Loading, downloadUrl, fmtDate, useApp } from '../ui';
+import { Alert, ErrorBox, Loading, Modal, downloadUrl, fmtDate, useApp } from '../ui';
 
 const DEFAULT_MODELS: Record<string, string> = { anthropic: 'claude-sonnet-5-5', gemini: 'gemini-3.8-flash', openai: 'gpt-5' };
 
@@ -14,7 +14,11 @@ export function Settings() {
   const [test, setTest] = useState<any>(null);
   const [testing, setTesting] = useState(false);
   const [pw, setPw] = useState({ current: '', next: '' });
-  const load = () => api('/api/teacher/settings').then((r) => { setD(r); setAi(r.ai); }).catch((e) => setError(e.message));
+  const [scale, setScale] = useState<string[]>([]);
+  const [names, setNames] = useState(false);
+  const [reset, setReset] = useState<null | 'work' | 'all'>(null);
+  const [resetForm, setResetForm] = useState({ password: '', confirm: '' });
+  const load = () => api('/api/teacher/settings').then((r: any) => { setD(r); setAi(r.ai); setScale(r.scale.map((x: any) => x.label)); }).catch((e) => setError(e.message));
   useEffect(() => { load(); }, []);
 
   async function saveAi() {
@@ -26,6 +30,17 @@ export function Settings() {
   async function saveApp(k: string, v: boolean) {
     try { const r = await api<any>('/api/teacher/settings', { method: 'PUT', body: { app: { [k]: v } } }); setD(r); }
     catch (e: any) { toast(e.message, 'error'); }
+  }
+  async function saveScale(v: string[] | null) {
+    try { const r = await api<any>('/api/teacher/settings', { method: 'PUT', body: { scale: v } }); setD(r); setScale(r.scale.map((x: any) => x.label)); toast('حُفظت مستويات السلم.', 'ok'); }
+    catch (e: any) { toast(e.message, 'error'); }
+  }
+  async function doReset() {
+    try {
+      await api('/api/teacher/reset', { body: { mode: reset, ...resetForm } });
+      toast(reset === 'all' ? 'حُذفت جميع الطالبات وبياناتهن.' : 'صُفّر عمل جميع الطالبات.', 'ok');
+      setReset(null); setResetForm({ password: '', confirm: '' });
+    } catch (e: any) { toast(e.message, 'error'); }
   }
   async function runTest() {
     setTesting(true); setTest(null);
@@ -116,12 +131,47 @@ export function Settings() {
       </section>
 
       <section className="card">
-        <div className="card-title"><Icon name="download" /> تصدير البيانات</div>
-        <p className="small muted">بيانات أداء ومنتجات بالمعرفات المستعارة. لا تتضمن درجات بحثية نهائية، ولا تُعد قياسًا للدافعية.</p>
-        <div className="row">
-          <button className="btn" onClick={() => downloadUrl('/api/teacher/export.csv')}>تنزيل CSV (يفتح في Excel)</button>
-          <button className="btn" onClick={() => downloadUrl('/api/teacher/export.json')}>تنزيل JSON كامل</button>
+        <div className="card-title"><Icon name="star" /> مستويات سلالم التقدير</div>
+        <p className="small muted">تُستخدم هذه المستويات في تقدير جميع الأنشطة. الأعلى أولًا، وتأخذ الدرجات من {scale.length} إلى 1. أما بنود كل نشاط فتُعدَّل من تبويب «سلالم التقدير».</p>
+        <div className="stack" style={{ gap: 6, maxWidth: 420 }}>
+          {scale.map((l, i) => (
+            <div key={i} className="row">
+              <span className="badge" style={{ minWidth: 34, justifyContent: 'center' }}>{scale.length - i}</span>
+              <input className="input grow" value={l} onChange={(e) => setScale(scale.map((x, j) => (j === i ? e.target.value : x)))} />
+              <button className="icon-btn" aria-label="حذف المستوى" disabled={scale.length <= 2} onClick={() => setScale(scale.filter((_, j) => j !== i))}><Icon name="x" /></button>
+            </div>
+          ))}
         </div>
+        <div className="row" style={{ marginTop: 8 }}>
+          <button className="btn sm" disabled={scale.length >= 6} onClick={() => setScale([...scale, ''])}><Icon name="plus" size={15} /> إضافة مستوى</button>
+          <button className="btn sm primary" onClick={() => saveScale(scale)}>حفظ المستويات</button>
+          <button className="btn sm ghost" onClick={() => saveScale(null)}>استعادة الافتراضي</button>
+        </div>
+        <p className="tiny muted" style={{ marginTop: 6 }}>تغيير عدد المستويات بعد بدء التقدير قد يغيّر معنى الدرجات المحفوظة؛ يُفضّل ضبطه قبل البدء.</p>
+      </section>
+
+      <section className="card">
+        <div className="card-title"><Icon name="download" /> تصدير البيانات</div>
+        <p className="small muted">بيانات أداء ومنتجات وتقديرات بالمعرفات المستعارة. لا تُعد قياسًا للدافعية.</p>
+        <label className="row small" style={{ marginBottom: 8 }}><input type="checkbox" checked={names} onChange={(e) => setNames(e.target.checked)} /> تضمين أسماء الطالبات في الملفات (الأصل: دون أسماء، وهو الأنسب للتحليل البحثي)</label>
+        <div className="row">
+          <button className="btn" onClick={() => downloadUrl(`/api/teacher/export.csv${names ? '?names=1' : ''}`)}>تنزيل الإجابات CSV (يفتح في Excel)</button>
+          <button className="btn" onClick={() => downloadUrl(`/api/teacher/export-ratings.csv${names ? '?names=1' : ''}`)}>تنزيل تقديرات المعلمة CSV</button>
+          <button className="btn" onClick={() => downloadUrl(`/api/teacher/export.json${names ? '?names=1' : ''}`)}>تنزيل JSON كامل</button>
+        </div>
+      </section>
+
+      <section className="card danger-zone">
+        <div className="card-title" style={{ color: 'var(--danger)' }}><Icon name="alert" /> التصفير</div>
+        <p className="small muted">يفيد بعد فترة التجريب أو التحكيم، لبدء التطبيق الفعلي ببيانات نظيفة. المحتوى التعليمي والإعدادات وتعديلاتكِ على الحصص وسلالم التقدير لا تتأثر. <b>لا يمكن التراجع عن التصفير؛ نزّلي نسخة JSON أولًا.</b></p>
+        <div className="row">
+          <button className="btn danger" onClick={() => setReset('work')}>تصفير عمل الطالبات</button>
+          <button className="btn danger" onClick={() => setReset('all')}>حذف جميع الطالبات</button>
+        </div>
+        <ul className="small muted" style={{ margin: '8px 0 0', paddingInlineStart: 20 }}>
+          <li><b>تصفير عمل الطالبات:</b> تبقى الرموز والأسماء، وتُمحى الإجابات والمنتجات والمحادثات والملاحظات والتقديرات والمشاركات، فتبدأ كل طالبة من الحصة الأولى.</li>
+          <li><b>حذف جميع الطالبات:</b> تُحذف الرموز والأسماء وكل بياناتهن، وتُنشئين رموزًا جديدة.</li>
+        </ul>
       </section>
 
       <section className="card">
@@ -132,6 +182,27 @@ export function Settings() {
           <button className="btn" onClick={() => api('/api/teacher/password', { body: pw }).then(() => { toast('تغيرت كلمة المرور.', 'ok'); setPw({ current: '', next: '' }); }).catch((e) => toast(e.message, 'error'))}>تغيير</button>
         </div>
       </section>
+      {reset && (
+        <Modal title={reset === 'all' ? 'حذف جميع الطالبات' : 'تصفير عمل الطالبات'} onClose={() => setReset(null)}
+          footer={<>
+            <button className="btn" onClick={() => setReset(null)}>إلغاء</button>
+            <button className="btn danger" disabled={resetForm.confirm.trim() !== 'تصفير' || !resetForm.password} onClick={doReset}>تنفيذ نهائي</button>
+          </>}>
+          <Alert kind="danger">
+            {reset === 'all'
+              ? `ستُحذف ${'جميع الطالبات'} ورموزهن وأسماؤهن وكل بياناتهن نهائيًا.`
+              : 'ستُمحى إجابات جميع الطالبات ومنتجاتهن ومحادثاتهن والملاحظات والتقديرات والمشاركات نهائيًا، وتبقى الرموز والأسماء.'}
+            {' '}لا يمكن التراجع.
+          </Alert>
+          <div className="row" style={{ marginTop: 10 }}>
+            <button className="btn sm" onClick={() => downloadUrl('/api/teacher/export.json?names=1')}><Icon name="download" size={15} /> تنزيل نسخة احتياطية أولًا</button>
+          </div>
+          <label className="field" style={{ marginTop: 10 }}><span className="field-label">كلمة مرور المعلمة</span>
+            <input className="input" type="password" autoComplete="current-password" value={resetForm.password} onChange={(e) => setResetForm({ ...resetForm, password: e.target.value })} /></label>
+          <label className="field" style={{ marginTop: 8 }}><span className="field-label">اكتبي كلمة «تصفير» للتأكيد</span>
+            <input className="input" value={resetForm.confirm} onChange={(e) => setResetForm({ ...resetForm, confirm: e.target.value })} /></label>
+        </Modal>
+      )}
     </div>
   );
 }

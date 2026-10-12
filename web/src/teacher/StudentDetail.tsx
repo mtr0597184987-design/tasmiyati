@@ -5,6 +5,7 @@ import { go } from '../router';
 import { Alert, ErrorBox, Loading, Modal, fmtDate, useApp } from '../ui';
 import { Compare } from '../activity/Evaluation';
 import { Portfolio } from '../pages/Portfolio';
+import { RatingCard } from './Ratings';
 
 const ST: Record<string, [string, string]> = { completed: ['مكتمل', 'ok'], in_progress: ['قيد الإنجاز', 'warn'], available: ['متاح', 'primary'], locked: ['مقفل', ''] };
 
@@ -16,6 +17,7 @@ export function StudentDetail({ id }: { id: string }) {
   const [portfolio, setPortfolio] = useState<any>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [reopen, setReopen] = useState<string | null>(null);
+  const [nameEdit, setNameEdit] = useState<string | null>(null);
   const load = () => api(`/api/teacher/students/${id}`).then(setD).catch((e) => setError(e.message));
   useEffect(() => { load(); }, [id]);
 
@@ -33,8 +35,17 @@ export function StudentDetail({ id }: { id: string }) {
       <section className="card">
         <div className="row between">
           <div>
-            <h2 style={{ margin: 0 }}>{s.label}</h2>
-            <div className="small muted">الرمز الدراسي: <span className="ltr">{s.code}</span></div>
+            <h2 style={{ margin: 0 }}>{s.name || s.label}</h2>
+            <div className="small muted">{s.name ? `${s.label} · ` : ''}الرمز الدراسي: <span className="ltr">{s.code}</span></div>
+            {nameEdit === null ? (
+              <button className="btn sm ghost" style={{ marginTop: 4 }} onClick={() => setNameEdit(s.name ?? '')}><Icon name="edit" size={14} /> {s.name ? 'تعديل الاسم' : 'إضافة اسم'}</button>
+            ) : (
+              <form className="row" style={{ marginTop: 6 }} onSubmit={(e) => { e.preventDefault(); const v = nameEdit; setNameEdit(null); act(() => api(`/api/teacher/students/${s.id}`, { method: 'PATCH', body: { name: v } }), 'حُفظ الاسم.'); }}>
+                <input className="input" style={{ width: 220 }} autoFocus value={nameEdit} onChange={(e) => setNameEdit(e.target.value)} placeholder="اسم الطالبة" />
+                <button className="btn sm primary">حفظ</button>
+                <button type="button" className="btn sm" onClick={() => setNameEdit(null)}>إلغاء</button>
+              </form>
+            )}
           </div>
           <div className="row">
             <button className="btn sm" onClick={() => api(`/api/teacher/students/${s.id}/portfolio`).then(setPortfolio)}><Icon name="folder" size={16} /> ملف الإنجاز</button>
@@ -91,6 +102,7 @@ export function StudentDetail({ id }: { id: string }) {
                   {a.answers.length ? <dl className="kv">{a.answers.map((x: any) => <div key={x.id} style={{ display: 'contents' }}><dt>{x.label}</dt><dd className="writing">{x.value}</dd></div>)}</dl> : <p className="small muted">لا توجد إجابات محفوظة.</p>}
                   {a.hints.length > 0 && <div className="small">التلميحات المستخدمة: {a.hints.map((h: any) => `${h.section_id} (حتى المستوى ${h.level})`).join('، ')}</div>}
                   {a.notes.map((n: any) => <div key={n.id} className="small card soft" style={{ padding: 8 }}>{n.note} <span className="tiny muted">{n.visible_to_student ? '· تراها الطالبة' : '· خاصة بكِ'}</span> <button className="btn sm ghost" onClick={() => act(() => api(`/api/teacher/notes/${n.id}`, { method: 'DELETE' }), 'حُذفت الملاحظة.')}>حذف</button></div>)}
+                  <RatingCard studentId={s.id} activityId={a.id} scale={d.scale} rating={a.rating} />
                   <NoteForm onSave={(note, visible) => act(() => api('/api/teacher/notes', { body: { studentId: s.id, activityId: a.id, note, visibleToStudent: visible } }), 'حُفظت الملاحظة.')} />
                   <div className="row">
                     {a.status === 'locked' && <button className="btn sm" onClick={() => act(() => api(`/api/teacher/students/${s.id}/unlock`, { body: { activityId: a.id } }), 'فُتح النشاط للطالبة.')}><Icon name="lock" size={15} /> فتح النشاط لها (تجاوز المتطلبات)</button>}
@@ -111,7 +123,7 @@ export function StudentDetail({ id }: { id: string }) {
           </div>
         </Modal>
       )}
-      {portfolio && <Modal title={`ملف إنجاز ${s.label}`} onClose={() => setPortfolio(null)}><Portfolio data={portfolio} teacherView /></Modal>}
+      {portfolio && <Modal title={`ملف إنجاز ${s.name || s.label}`} onClose={() => setPortfolio(null)}><Portfolio data={portfolio} teacherView /></Modal>}
       {reopen && (
         <Modal title="إعادة فتح التسليم" onClose={() => setReopen(null)}
           footer={<><button className="btn" onClick={() => setReopen(null)}>إلغاء</button><button className="btn primary" onClick={() => { const id = reopen; setReopen(null); act(() => api(`/api/teacher/students/${s.id}/reopen-independent`, { body: { lessonId: id } }), 'أُعيد فتح الإنتاج المستقل.'); }}>إعادة الفتح</button></>}>

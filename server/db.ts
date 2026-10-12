@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS users (
   role TEXT NOT NULL CHECK (role IN ('student','teacher')),
   code TEXT UNIQUE,              -- معرف دراسي مستعار للطالبة / اسم دخول للمعلمة
   label TEXT NOT NULL,           -- اسم عرض مستعار مثل «طالبة 01»
+  real_name TEXT,                -- اسم تضيفه المعلمة (اختياري): يظهر للمعلمة وللطالبة نفسها فقط، ولا يُرسل إلى النموذج
   group_name TEXT,
   pass_hash TEXT,
   free_navigation INTEGER NOT NULL DEFAULT 0,
@@ -130,6 +131,15 @@ CREATE TABLE IF NOT EXISTS audit_log (
   target TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+CREATE TABLE IF NOT EXISTS teacher_ratings (
+  student_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  activity_id TEXT NOT NULL,
+  criterion_id TEXT NOT NULL,    -- بند السلم، أو __note للملاحظة العامة
+  level INTEGER,
+  note TEXT,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (student_id, activity_id, criterion_id)
+);
 CREATE INDEX IF NOT EXISTS idx_chat ON chat_messages(student_id, activity_id);
 `;
 db.exec(SCHEMA);
@@ -168,7 +178,7 @@ export function tx<T>(fn: () => T): T {
   }
 }
 
-export const TABLES = ['users', 'settings', 'lesson_state', 'overrides', 'progress', 'responses', 'artifacts', 'chat_messages', 'hint_log', 'feedback', 'teacher_notes', 'skill_log', 'shares', 'share_comments', 'audit_log'];
+export const TABLES = ['users', 'settings', 'lesson_state', 'overrides', 'progress', 'responses', 'artifacts', 'chat_messages', 'hint_log', 'feedback', 'teacher_notes', 'skill_log', 'shares', 'share_comments', 'teacher_ratings', 'audit_log'];
 
 /** يُستدعى مرة عند بدء الخادم قبل أي كتابة */
 export async function initDb() {
@@ -178,6 +188,9 @@ export async function initDb() {
     exec: (sql) => db.exec(sql),
     insertRow: (t, row) => { const cols = Object.keys(row); db.prepare(`INSERT INTO ${t}(${cols.join(',')}) VALUES(${cols.map(() => '?').join(',')})`).run(...cols.map((c) => row[c] as any)); },
   }, statements, TABLES);
+  // ترقية قاعدة قائمة: إضافة عمود الاسم إن لم يكن موجودًا
+  const cols = (db.prepare('PRAGMA table_info(users)').all() as any[]).map((c) => c.name);
+  if (!cols.includes('real_name')) run('ALTER TABLE users ADD COLUMN real_name TEXT');
 }
 
 export function getSetting<T>(key: string, fallback: T): T {

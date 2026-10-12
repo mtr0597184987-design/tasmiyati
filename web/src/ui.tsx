@@ -3,7 +3,7 @@ import { Icon, BrandMark } from './icons';
 import { href } from './router';
 
 // ---------- السياق العام ----------
-export interface Me { id: number; role: 'student' | 'teacher'; label: string; group: string | null }
+export interface Me { id: number; role: 'student' | 'teacher'; label: string; group: string | null; name?: string | null }
 export interface AppCtx {
   me: Me;
   aiMode: 'live' | 'demo' | 'off';
@@ -109,7 +109,7 @@ export function TopBar({ children }: { children?: ReactNode }) {
           </a>
           <div className="grow" />
           {children}
-          <span className="small muted nowrap" title="اسم مستعار">{me.label}</span>
+          <span className="small muted nowrap topbar-name" title={me.name ? undefined : 'اسم مستعار'}>{me.name || me.label}</span>
           <button className="btn ghost sm" onClick={logout}><Icon name="logout" size={18} /> خروج</button>
         </div>
       </header>

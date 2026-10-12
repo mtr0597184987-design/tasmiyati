@@ -364,3 +364,85 @@ test('الحصة الثانية: البناء على منتج الحصة الأ�
   const port = await s1.get('/api/portfolio');
   assert.ok(port.data.journey.find((j) => j.lessonId === 'L02').data);
 });
+
+test('الأسماء: تضيفها المعلمة، وتراها الطالبة نفسها فقط، ولا تصل إلى النموذج ولا إلى التصدير إلا باختيار', async () => {
+  const r = await teacher.post('/api/teacher/students', { names: ['لمى زيدان', '  ', 'ريم خالد'], prefix: 'NM' });
+  assert.equal(r.data.created.length, 2);
+  assert.equal(r.data.created[0].name, 'لمى زيدان');
+  assert.match(r.data.created[0].label, /^طالبة \d+$/);
+  const st = new Client();
+  await st.post('/api/auth/student', { code: r.data.created[0].code });
+  assert.equal((await st.get('/api/me')).data.user.name, 'لمى زيدان');
+  // لا يظهر الاسم في سياق النموذج
+  mockMode = 'chat';
+  await teacher.put('/api/teacher/settings', { ai: { provider: 'openai', baseUrl: `http://localhost:${mockPort}/v1`, model: 'mock-model', apiKey: 'sk-secret-key-1234', enabled: true } });
+  await st.post('/api/activities/1-1/chat', { message: 'مرحبًا' });
+  assert.ok(!JSON.stringify(lastMockRequest).includes('زيدان'));
+  await teacher.put('/api/teacher/settings', { ai: { clearKey: true, provider: 'anthropic', model: 'claude-sonnet-5-5' } });
+  // التصدير دون أسماء افتراضيًا، وبها عند الطلب
+  assert.ok(!String((await teacher.get('/api/teacher/export.csv')).data).includes('لمى زيدان'));
+  assert.ok(String((await teacher.get('/api/teacher/export.csv?names=1')).data).includes('لمى زيدان'));
+  // تعديل الاسم وحذفه
+  const id = (await teacher.get('/api/teacher/overview')).data.students.find((s) => s.code === r.data.created[1].code).id;
+  await teacher.patch(`/api/teacher/students/${id}`, { name: 'ريم خالد علي' });
+  assert.equal((await teacher.get(`/api/teacher/students/${id}`)).data.student.name, 'ريم خالد علي');
+  await teacher.patch(`/api/teacher/students/${id}`, { name: '' });
+  assert.equal((await teacher.get(`/api/teacher/students/${id}`)).data.student.name, null);
+});
+
+test('سلالم التقدير: بنود من المهارات المعتمدة، وحفظ وتعديل، ومستويات قابلة للتغيير، وتصدير', async () => {
+  const sheet = await teacher.get('/api/teacher/ratings/1-1');
+  assert.equal(sheet.status, 200);
+  assert.equal(sheet.data.scale.length, 4);
+  assert.ok(sheet.data.criteria.some((c) => c.text === 'تحديد موضوع الكتابة ومجاله تحديدًا دقيقًا.'));
+  const sid = sheet.data.students[0].id;
+  const [c1, c2] = sheet.data.criteria;
+  let r = await teacher.put(`/api/teacher/students/${sid}/ratings`, { activityId: '1-1', values: { [c1.id]: 4, [c2.id]: 2, bogus: 3 }, note: 'تحتاج دعمًا في الهدف' });
+  assert.deepEqual(r.data.values, { [c1.id]: 4, [c2.id]: 2 });
+  assert.equal(r.data.note, 'تحتاج دعمًا في الهدف');
+  r = await teacher.put(`/api/teacher/students/${sid}/ratings`, { activityId: '1-1', values: { [c2.id]: null, [c1.id]: 9 } });
+  assert.deepEqual(r.data.values, { [c1.id]: 4 }); // مستوى غير موجود يُرفض، وnull يمحو
+  // الإنتاج المستقل يستخدم معايير الحصة
+  const ind = await teacher.get('/api/teacher/ratings/1-7');
+  assert.ok(ind.data.criteria[0].id.startsWith('r-'));
+  // تعديل البنود ثم الاستعادة
+  await teacher.put('/api/teacher/activities/1-1/scale', { criteria: [{ id: c1.id, text: 'بند معدّل' }, { text: 'بند جديد' }] });
+  const edited = await teacher.get('/api/teacher/ratings/1-1');
+  assert.equal(edited.data.custom, true);
+  assert.equal(edited.data.criteria.length, 2);
+  assert.equal(edited.data.students.find((s) => s.id === sid).values[c1.id], 4);
+  await teacher.req('DELETE', '/api/teacher/activities/1-1/scale');
+  // المستويات
+  const sc = await teacher.put('/api/teacher/settings', { scale: ['متقن', 'متمكن', 'مبتدئ'] });
+  assert.deepEqual(sc.data.scale.map((x) => x.value), [3, 2, 1]);
+  assert.equal((await teacher.put('/api/teacher/settings', { scale: ['واحد'] })).status, 400);
+  await teacher.put('/api/teacher/settings', { scale: null });
+  // يظهر في صفحة الطالبة والتصدير، ولا يصل إلى الطالبة
+  const det = await teacher.get(`/api/teacher/students/${sid}`);
+  assert.equal(det.data.lessons[0].activities[0].rating.values[c1.id], 4);
+  const csv = String((await teacher.get('/api/teacher/export-ratings.csv')).data);
+  assert.ok(csv.includes('ممتاز') && csv.includes('تحتاج دعمًا في الهدف'));
+  assert.ok(!JSON.stringify((await s1.get('/api/activities/1-1')).data).includes('تحتاج دعمًا في الهدف'));
+  // الطالبة لا تصل إلى واجهات التقدير
+  assert.equal((await s1.get('/api/teacher/ratings/1-1')).status, 403);
+});
+
+test('التصفير: يتطلب كلمة المرور والتأكيد، ويُبقي المحتوى والإعدادات', async () => {
+  assert.equal((await teacher.post('/api/teacher/reset', { mode: 'work', password: 'test-pass-123', confirm: 'نعم' })).status, 400);
+  assert.equal((await teacher.post('/api/teacher/reset', { mode: 'work', password: 'خطأ', confirm: 'تصفير' })).status, 400);
+  assert.equal((await s1.post('/api/teacher/reset', { mode: 'all', password: 'test-pass-123', confirm: 'تصفير' })).status, 403);
+  await teacher.put('/api/teacher/activities/1-2/assistant', { extraInstructions: 'تبقى بعد التصفير' });
+  const before = (await teacher.get('/api/teacher/overview')).data.students.length;
+  assert.equal((await teacher.post('/api/teacher/reset', { mode: 'work', password: 'test-pass-123', confirm: 'تصفير' })).status, 200);
+  const o = await teacher.get('/api/teacher/overview');
+  assert.equal(o.data.students.length, before);
+  assert.ok(o.data.students.every((s) => Object.values(s.progress.L01).every((x) => x !== 'completed')));
+  assert.equal((await s1.get('/api/activities/1-1')).status, 200); // الطالبة ما زالت تستطيع الدخول
+  assert.equal(String((await teacher.get('/api/teacher/export-ratings.csv')).data).split('\r\n').length, 1);
+  assert.equal((await teacher.post('/api/teacher/reset', { mode: 'all', password: 'test-pass-123', confirm: 'تصفير' })).status, 200);
+  assert.equal((await teacher.get('/api/teacher/overview')).data.students.length, 0);
+  assert.equal((await s1.get('/api/activities/1-1')).status, 401);
+  const content = await teacher.get('/api/teacher/content');
+  assert.ok(JSON.stringify(content.data).includes('تبقى بعد التصفير'));
+  await teacher.req('DELETE', '/api/teacher/activities/1-2/assistant');
+});

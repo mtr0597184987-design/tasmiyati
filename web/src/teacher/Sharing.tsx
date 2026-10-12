@@ -22,7 +22,7 @@ export function Sharing() {
           {d.shares.map((s: any) => (
             <div key={s.id} className="card flat" style={{ padding: 12 }}>
               <div className="row between">
-                <span className="small"><b>{s.label}</b> · النشاط ({s.activity_id}) · {fmtDate(s.created_at)}</span>
+                <span className="small"><b>{s.name || s.label}</b> · النشاط ({s.activity_id}) · {fmtDate(s.created_at)}</span>
                 <span className={`badge ${s.status === 'approved' ? 'ok' : s.status === 'pending' ? 'warn' : ''}`}>{s.status === 'approved' ? 'معروضة' : s.status === 'pending' ? 'بانتظار قراركِ' : 'غير معروضة'}</span>
               </div>
               <dl className="kv" style={{ margin: '8px 0' }}>{Object.entries(s.content).map(([k, v]) => <div key={k} style={{ display: 'contents' }}><dt>{k}</dt><dd className="writing">{String(v)}</dd></div>)}</dl>
@@ -41,7 +41,7 @@ export function Sharing() {
           <tbody>
             {d.comments.map((c: any) => (
               <tr key={c.id}>
-                <td className="small nowrap">{c.label}<div className="tiny muted">({c.activity_id})</div></td>
+                <td className="small nowrap">{c.name || c.label}<div className="tiny muted">({c.activity_id})</div></td>
                 <td>{c.text}</td>
                 <td className="nowrap">
                   {c.status === 'pending' ? <>

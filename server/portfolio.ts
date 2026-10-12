@@ -5,7 +5,7 @@ import { formatValue } from './ai.ts';
 import { getArtifact, getValues, latestProducts } from './logic.ts';
 
 export function portfolioData(studentId: number) {
-  const user = get('SELECT label, group_name FROM users WHERE id = ?', studentId);
+  const user = get('SELECT label, real_name, group_name FROM users WHERE id = ?', studentId);
   const content = loadContent();
   const progress = all('SELECT activity_id, status, completed_at FROM progress WHERE student_id = ?', studentId);
   const pmap = new Map(progress.map((p) => [p.activity_id, p]));
@@ -60,7 +60,7 @@ export function portfolioData(studentId: number) {
   return {
     journey,
     finalText: last ? { title: last.data!.title, intro: last.data!.intro, body: last.data!.body, conclusion: last.data!.conclusion, version: last.version, updatedAt: last.updatedAt, approvedAt: last.approvedAt } : null,
-    student: { label: user?.label, group: user?.group_name },
+    student: { label: user?.real_name || user?.label, group: user?.group_name },
     generatedAt: new Date().toISOString(),
     skills: skillRows.map((r) => ({ id: r.skill_id, text: content.skills.find((s) => s.id === r.skill_id)?.text, activities: r.n, last: r.last })),
     lessons,

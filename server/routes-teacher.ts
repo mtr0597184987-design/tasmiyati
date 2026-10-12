@@ -7,6 +7,7 @@ import { activityStatuses, appSettings, getArtifact, getValues, DEFAULT_SETTINGS
 import { callModel, formatValue, getAIConfig, AIError } from './ai.ts';
 import { portfolioData } from './portfolio.ts';
 import { replicaStatus } from './replica.ts';
+import { activityCriteria, getRatings, ratingScale, saveRatings } from './ratings.ts';
 
 function audit(actor: number, action: string, target = '') {
   run('INSERT INTO audit_log(actor_id, action, target) VALUES(?,?,?)', actor, action, target);
@@ -21,14 +22,14 @@ function studentOr404(id: string | number) {
 // ---------- الطالبات ----------
 route('GET', '/api/teacher/overview', 'teacher', () => {
   const lessons = allLessons().filter((l) => l.activities.length);
-  const students = all("SELECT id, code, label, group_name, free_navigation, created_at FROM users WHERE role = 'student' ORDER BY id");
+  const students = all("SELECT id, code, label, real_name, group_name, free_navigation, created_at FROM users WHERE role = 'student' ORDER BY id");
   return {
     lessons: lessons.map((l) => ({ id: l.id, number: l.number, title: l.title, activities: l.activities.map((a) => ({ id: a.id, title: a.title, stage: a.stage })) })),
     students: students.map((s) => {
       const perLesson = Object.fromEntries(lessons.map((l) => [l.id, activityStatuses(s.id, l)]));
       const pendingShares = get("SELECT COUNT(*) AS n FROM shares WHERE student_id = ? AND status = 'pending'", s.id)?.n ?? 0;
       const last = get('SELECT MAX(updated_at) AS t FROM responses WHERE student_id = ?', s.id)?.t ?? null;
-      return { ...s, freeNavigation: !!s.free_navigation, progress: perLesson, pendingShares, lastActivity: last };
+      return { ...s, name: s.real_name ?? null, freeNavigation: !!s.free_navigation, progress: perLesson, pendingShares, lastActivity: last };
     }),
     pending: {
       shares: get("SELECT COUNT(*) AS n FROM shares WHERE status = 'pending'")?.n ?? 0,
@@ -39,19 +40,25 @@ route('GET', '/api/teacher/overview', 'teacher', () => {
 });
 
 route('POST', '/api/teacher/students', 'teacher', (c) => {
-  const count = Math.max(1, Math.min(60, Number(c.body?.count) || 1));
+  // إما عدد من الرموز، وإما قائمة أسماء (اسم في كل سطر) يُنشأ لكل اسم رمز
+  const names: string[] = Array.isArray(c.body?.names)
+    ? c.body.names.map((x: unknown) => String(x ?? '').trim().slice(0, 80)).filter(Boolean).slice(0, 100)
+    : [];
+  const count = names.length || Math.max(1, Math.min(60, Number(c.body?.count) || 1));
   const prefix = String(c.body?.prefix ?? 'TS').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6) || 'TS';
   const group = String(c.body?.group ?? '').trim().slice(0, 40) || null;
-  const created: { code: string; label: string }[] = [];
+  const created: { code: string; label: string; name: string | null }[] = [];
   tx(() => {
     let n = (get("SELECT COUNT(*) AS n FROM users WHERE role = 'student'")?.n ?? 0) as number;
     for (let i = 0; i < count; i++) {
       n++;
       let code = newStudentCode(prefix);
       while (get('SELECT 1 FROM users WHERE code = ?', code)) code = newStudentCode(prefix);
-      const label = `طالبة ${String(n).padStart(2, '0')}`;
-      run("INSERT INTO users(role, code, label, group_name) VALUES('student', ?, ?, ?)", code, label, group);
-      created.push({ code, label });
+      let label = `طالبة ${String(n).padStart(2, '0')}`;
+      while (get('SELECT 1 FROM users WHERE label = ?', label)) { n++; label = `طالبة ${String(n).padStart(2, '0')}`; }
+      const name = names[i] ?? null;
+      run("INSERT INTO users(role, code, label, real_name, group_name) VALUES('student', ?, ?, ?, ?)", code, label, name, group);
+      created.push({ code, label, name });
     }
   });
   audit(c.user!.id, 'create_students', String(count));
@@ -63,7 +70,8 @@ route('PATCH', '/api/teacher/students/:id', 'teacher', (c) => {
   const label = c.body?.label != null ? String(c.body.label).trim().slice(0, 40) || s.label : s.label;
   const group = c.body?.group !== undefined ? (String(c.body.group ?? '').trim().slice(0, 40) || null) : s.group_name;
   const free = c.body?.freeNavigation !== undefined ? (c.body.freeNavigation ? 1 : 0) : s.free_navigation;
-  run('UPDATE users SET label = ?, group_name = ?, free_navigation = ? WHERE id = ?', label, group, free, s.id);
+  const name = c.body?.name !== undefined ? (String(c.body.name ?? '').trim().slice(0, 80) || null) : s.real_name;
+  run('UPDATE users SET label = ?, real_name = ?, group_name = ?, free_navigation = ? WHERE id = ?', label, name, group, free, s.id);
   return { ok: true };
 });
 
@@ -97,11 +105,12 @@ route('GET', '/api/teacher/students/:id', 'teacher', (c) => {
           feedback: all('SELECT id, source, data, visible, reviewed, created_at FROM feedback WHERE student_id = ? AND activity_id = ? ORDER BY id', s.id, a.id).map((f) => ({ ...f, data: parse(f.data, {}) })),
           notes: all('SELECT id, note, visible_to_student, created_at FROM teacher_notes WHERE student_id = ? AND activity_id = ? ORDER BY id', s.id, a.id),
           chatCount: get('SELECT COUNT(*) AS n FROM chat_messages WHERE student_id = ? AND activity_id = ?', s.id, a.id)?.n ?? 0,
+          rating: { criteria: activityCriteria(l, a).criteria, ...getRatings(s.id, a.id) },
         };
       }),
     };
   });
-  return { student: { id: s.id, code: s.code, label: s.label, group: s.group_name, freeNavigation: !!s.free_navigation }, lessons };
+  return { student: { id: s.id, code: s.code, label: s.label, name: s.real_name ?? null, group: s.group_name, freeNavigation: !!s.free_navigation }, scale: ratingScale(), lessons };
 });
 
 // سجل المساعد: يُفتح عند الحاجة فقط، ويُسجَّل الاطلاع عليه
@@ -181,9 +190,9 @@ route('PATCH', '/api/teacher/feedback/:id', 'teacher', (c) => {
 
 // ---------- المشاركات بين الطالبات ----------
 route('GET', '/api/teacher/shares', 'teacher', () => ({
-  shares: all(`SELECT s.id, s.activity_id, s.content, s.status, s.scope, s.anonymous, s.created_at, u.label, u.group_name FROM shares s JOIN users u ON u.id = s.student_id ORDER BY s.status = 'pending' DESC, s.id DESC`)
+  shares: all(`SELECT s.id, s.activity_id, s.content, s.status, s.scope, s.anonymous, s.created_at, u.label, u.real_name AS name, u.group_name FROM shares s JOIN users u ON u.id = s.student_id ORDER BY s.status = 'pending' DESC, s.id DESC`)
     .map((s) => ({ ...s, content: parse(s.content, {}) })),
-  comments: all(`SELECT c.id, c.text, c.status, c.created_at, u.label, s.activity_id, s.id AS share_id FROM share_comments c JOIN users u ON u.id = c.student_id JOIN shares s ON s.id = c.share_id ORDER BY c.status = 'pending' DESC, c.id DESC`),
+  comments: all(`SELECT c.id, c.text, c.status, c.created_at, u.label, u.real_name AS name, s.activity_id, s.id AS share_id FROM share_comments c JOIN users u ON u.id = c.student_id JOIN shares s ON s.id = c.share_id ORDER BY c.status = 'pending' DESC, c.id DESC`),
 }));
 route('PATCH', '/api/teacher/shares/:id', 'teacher', (c) => {
   const status = ['approved', 'rejected', 'pending'].includes(c.body?.status) ? c.body.status : null;
@@ -283,7 +292,71 @@ route('PUT', '/api/teacher/lessons/:id/rubric', 'teacher', (c) => {
 route('DELETE', '/api/teacher/lessons/:id/rubric', 'teacher', (c) => { run('DELETE FROM overrides WHERE target = ?', `rubric:${c.params.id}`); return { ok: true }; });
 
 // ---------- الإعدادات ----------
-route('GET', '/api/teacher/settings', 'teacher', () => ({ app: appSettings(), ai: getAIConfig(), storage: replicaStatus() }));
+// ---------- سلالم التقدير ----------
+// صفحة التقدير الجماعي: كل طالبات النشاط في جدول واحد
+route('GET', '/api/teacher/ratings/:activity', 'teacher', (c) => {
+  const f = findActivity(c.params.activity);
+  if (!f) throw new HttpError(404, 'النشاط غير موجود.');
+  const { criteria, custom } = activityCriteria(f.lesson, f.activity);
+  const students = all("SELECT id, code, label, real_name FROM users WHERE role = 'student' ORDER BY id");
+  const st = (sid: number) => activityStatuses(sid, f.lesson)[f.activity.id];
+  return {
+    activity: { id: f.activity.id, title: f.activity.title, stage: f.activity.stage, lessonId: f.lesson.id },
+    scale: ratingScale(), criteria, custom,
+    students: students.map((x) => ({ id: x.id, code: x.code, label: x.label, name: x.real_name ?? null, status: st(x.id), ...getRatings(x.id, f.activity.id) })),
+  };
+});
+
+route('PUT', '/api/teacher/students/:id/ratings', 'teacher', (c) => {
+  const s = studentOr404(c.params.id);
+  const f = findActivity(String(c.body?.activityId ?? ''));
+  if (!f) throw new HttpError(404, 'النشاط غير موجود.');
+  const allowed = new Set(activityCriteria(f.lesson, f.activity).criteria.map((x) => x.id));
+  const levels = new Set(ratingScale().map((x) => x.value));
+  const values = c.body?.values && typeof c.body.values === 'object' ? c.body.values : {};
+  saveRatings(s.id, f.activity.id, values, c.body?.note, allowed, levels);
+  return { ok: true, ...getRatings(s.id, f.activity.id) };
+});
+
+// تعديل بنود السلم لنشاط (يسري على كل الطالبات)
+route('PUT', '/api/teacher/activities/:id/scale', 'teacher', (c) => {
+  const f = findActivity(c.params.id);
+  if (!f) throw new HttpError(404, 'النشاط غير موجود.');
+  const items: unknown[] = Array.isArray(c.body?.criteria) ? c.body.criteria : [];
+  const clean = items.map((x: any) => ({ id: String(x?.id ?? '').slice(0, 40), text: String(x?.text ?? '').trim().slice(0, 300) })).filter((x) => x.text).slice(0, 15);
+  if (!clean.length) throw new HttpError(400, 'أضيفي بندًا واحدًا على الأقل.');
+  const used = new Set<string>();
+  for (const x of clean) { if (!x.id || used.has(x.id)) { let i = 1; while (used.has(`k${i}`)) i++; x.id = `k${i}`; } used.add(x.id); }
+  setSetting(`scale:${f.activity.id}`, clean);
+  audit(c.user!.id, 'edit_scale', f.activity.id);
+  return { ok: true };
+});
+route('DELETE', '/api/teacher/activities/:id/scale', 'teacher', (c) => {
+  run('DELETE FROM settings WHERE key = ?', `scale:${c.params.id}`);
+  return { ok: true };
+});
+
+// ---------- التصفير ----------
+// work: تمحو عمل الطالبات وتُبقي رموزهن وأسماءهن. all: تحذف الطالبات وكل بياناتهن. المحتوى والإعدادات لا تتأثر.
+route('POST', '/api/teacher/reset', 'teacher', (c) => {
+  const mode = c.body?.mode === 'all' ? 'all' : c.body?.mode === 'work' ? 'work' : null;
+  if (!mode) throw new HttpError(400, 'اختاري نوع التصفير.');
+  if (String(c.body?.confirm ?? '').trim() !== 'تصفير') throw new HttpError(400, 'اكتبي كلمة «تصفير» للتأكيد.');
+  const t = get('SELECT pass_hash FROM users WHERE id = ?', c.user!.id);
+  if (!verifyPassword(String(c.body?.password ?? ''), t?.pass_hash)) throw new HttpError(400, 'كلمة مرور المعلمة غير صحيحة.');
+  tx(() => {
+    if (mode === 'all') {
+      run("DELETE FROM users WHERE role = 'student'"); // الحذف المتتالي يزيل كل السجلات المرتبطة
+    } else {
+      for (const tb of ['progress', 'responses', 'artifacts', 'chat_messages', 'hint_log', 'feedback', 'teacher_notes', 'skill_log', 'teacher_ratings', 'share_comments', 'shares']) run(`DELETE FROM ${tb}`);
+    }
+    run("DELETE FROM settings WHERE key LIKE 'reopened:%'");
+  });
+  audit(c.user!.id, 'reset_' + mode);
+  return { ok: true };
+});
+
+route('GET', '/api/teacher/settings', 'teacher', () => ({ app: appSettings(), ai: getAIConfig(), storage: replicaStatus(), scale: ratingScale() }));
 
 route('PUT', '/api/teacher/settings', 'teacher', (c) => {
   const b = c.body ?? {};
@@ -311,7 +384,15 @@ route('PUT', '/api/teacher/settings', 'teacher', (c) => {
     setSetting('ai', next);
     audit(c.user!.id, 'ai_settings');
   }
-  return { app: appSettings(), ai: getAIConfig() };
+  if (b.scale !== undefined) {
+    if (b.scale === null) run("DELETE FROM settings WHERE key = 'ratingScale'");
+    else {
+      const labels: string[] = (Array.isArray(b.scale) ? b.scale : []).map((x: unknown) => String(x ?? '').trim().slice(0, 40)).filter(Boolean);
+      if (labels.length < 2 || labels.length > 6) throw new HttpError(400, 'يجب أن يتكون السلم من مستويين إلى ستة مستويات.');
+      setSetting('ratingScale', labels.map((label, i) => ({ value: labels.length - i, label })));
+    }
+  }
+  return { app: appSettings(), ai: getAIConfig(), scale: ratingScale() };
 });
 
 route('POST', '/api/teacher/ai/test', 'teacher', async () => {
@@ -337,10 +418,14 @@ route('POST', '/api/teacher/password', 'teacher', (c) => {
 // ---------- التصدير ----------
 const csvCell = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""').replace(/\r?\n/g, ' ')}"`;
 
+const withNames = (c: any) => c.url.searchParams.get('names') === '1';
+
 route('GET', '/api/teacher/export.csv', 'teacher', (c) => {
   const lessons = allLessons().filter((l) => l.activities.length);
-  const students = all("SELECT id, code, label, group_name FROM users WHERE role = 'student' ORDER BY id");
-  const header = ['المعرف الدراسي', 'الاسم المستعار', 'المجموعة', 'الحصة', 'النشاط', 'الخطوة', 'الحالة', 'تاريخ الفتح', 'تاريخ الإكمال', 'الحقل', 'الإجابة', 'تاريخ الحفظ'];
+  const names = withNames(c);
+  const students = all("SELECT id, code, label, real_name, group_name FROM users WHERE role = 'student' ORDER BY id")
+    .map((s): Record<string, any> => ({ ...s, label: names && s.real_name ? `${s.label} — ${s.real_name}` : s.label }));
+  const header = ['المعرف الدراسي', names ? 'الاسم' : 'الاسم المستعار', 'المجموعة', 'الحصة', 'النشاط', 'الخطوة', 'الحالة', 'تاريخ الفتح', 'تاريخ الإكمال', 'الحقل', 'الإجابة', 'تاريخ الحفظ'];
   const rows: string[] = [header.map(csvCell).join(',')];
   for (const s of students) for (const l of lessons) {
     const st = activityStatuses(s.id, l);
@@ -366,13 +451,37 @@ route('GET', '/api/teacher/export.csv', 'teacher', (c) => {
   c.res.end('﻿' + rows.join('\r\n'));
 });
 
+// تقديرات المعلمة وفق سلالم التقدير
+route('GET', '/api/teacher/export-ratings.csv', 'teacher', (c) => {
+  const names = withNames(c);
+  const scale = ratingScale();
+  const lv = (v: number) => scale.find((x) => x.value === v)?.label ?? '';
+  const students = all("SELECT id, code, label, real_name FROM users WHERE role = 'student' ORDER BY id");
+  const header = ['المعرف الدراسي', 'الاسم المستعار', ...(names ? ['الاسم'] : []), 'الحصة', 'النشاط', 'عنوان النشاط', 'البند', 'الدرجة', 'المستوى', 'ملاحظة المعلمة', 'تاريخ التقدير'];
+  const rows: string[] = [header.map(csvCell).join(',')];
+  for (const s of students) for (const l of allLessons().filter((x) => x.activities.length)) for (const a of l.activities) {
+    const r = getRatings(s.id, a.id);
+    if (!Object.keys(r.values).length && !r.note) continue;
+    const base = [s.code, s.label, ...(names ? [s.real_name ?? ''] : []), l.number, a.id, a.title];
+    for (const cr of activityCriteria(l, a).criteria) {
+      const v = r.values[cr.id];
+      rows.push([...base, cr.text, v ?? '', v != null ? lv(v) : '', '', r.updatedAt].map(csvCell).join(','));
+    }
+    if (r.note) rows.push([...base, 'ملاحظة عامة', '', '', r.note, r.updatedAt].map(csvCell).join(','));
+  }
+  c.res.writeHead(200, { 'content-type': 'text/csv; charset=utf-8', 'content-disposition': 'attachment; filename="tasmiyati-ratings.csv"' });
+  c.res.end('\ufeff' + rows.join('\r\n'));
+});
+
 route('GET', '/api/teacher/export.json', 'teacher', (c) => {
-  const students = all("SELECT id, code, label, group_name, created_at FROM users WHERE role = 'student' ORDER BY id");
+  const names = withNames(c);
+  const students = all("SELECT id, code, label, real_name, group_name, created_at FROM users WHERE role = 'student' ORDER BY id");
   const data = {
     exportedAt: new Date().toISOString(),
-    note: 'بيانات أداء ومنتجات فقط. لا تتضمن درجات بحثية نهائية، ولا تُعد قياسًا للدافعية.',
+    note: 'بيانات أداء ومنتجات وتقديرات المعلمة. لا تُعد قياسًا للدافعية.',
+    ratingScale: ratingScale(),
     students: students.map((s) => ({
-      code: s.code, label: s.label, group: s.group_name,
+      code: s.code, label: s.label, ...(names ? { name: s.real_name ?? null } : {}), group: s.group_name,
       responses: all('SELECT activity_id, field_id, value, updated_at FROM responses WHERE student_id = ?', s.id).map((r) => ({ ...r, value: parse(r.value, null) })),
       progress: all('SELECT lesson_id, activity_id, status, opened_at, completed_at, unlocked_by_teacher FROM progress WHERE student_id = ?', s.id),
       artifacts: all('SELECT lesson_id, version, data, meta, created_at, updated_at FROM artifacts WHERE student_id = ?', s.id).map((r) => ({ ...r, data: parse(r.data, {}), meta: parse(r.meta, {}) })),
@@ -380,6 +489,7 @@ route('GET', '/api/teacher/export.json', 'teacher', (c) => {
       hints: all('SELECT activity_id, section_id, level, created_at FROM hint_log WHERE student_id = ?', s.id),
       skills: all('SELECT skill_id, activity_id, created_at FROM skill_log WHERE student_id = ?', s.id),
       teacherNotes: all('SELECT activity_id, note, created_at FROM teacher_notes WHERE student_id = ?', s.id),
+      teacherRatings: all('SELECT activity_id, criterion_id, level, note, updated_at FROM teacher_ratings WHERE student_id = ?', s.id),
     })),
   };
   c.res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'content-disposition': 'attachment; filename="tasmiyati-data.json"' });

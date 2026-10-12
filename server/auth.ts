@@ -2,7 +2,7 @@
 import crypto from 'node:crypto';
 import { get, getSetting, run, setSetting } from './db.ts';
 
-export interface SessionUser { id: number; role: 'student' | 'teacher'; label: string; group: string | null }
+export interface SessionUser { id: number; role: 'student' | 'teacher'; label: string; group: string | null; name?: string | null }
 
 function secret(): string {
   if (process.env.SESSION_SECRET) return process.env.SESSION_SECRET;
@@ -41,9 +41,9 @@ export function readToken(token: string | undefined): SessionUser | null {
   const expected = crypto.createHmac('sha256', secret()).update(`${id}.${role}.${exp}`).digest('base64url');
   if (sig.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null;
   if (Number(exp) < Date.now()) return null;
-  const u = get('SELECT id, role, label, group_name FROM users WHERE id = ? AND role = ?', Number(id), role);
+  const u = get('SELECT id, role, label, group_name, real_name FROM users WHERE id = ? AND role = ?', Number(id), role);
   if (!u) return null;
-  return { id: u.id, role: u.role, label: u.label, group: u.group_name ?? null };
+  return { id: u.id, role: u.role, label: u.label, group: u.group_name ?? null, name: u.real_name ?? null };
 }
 
 export function sessionCookie(token: string, secure: boolean): string {
