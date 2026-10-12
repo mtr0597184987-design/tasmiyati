@@ -1,29 +1,28 @@
-# نشر «تسمياتي» على Render.
-# فترة التحكيم: الخطة المجانية (plan: free) مع قاعدة Turso المجانية لحفظ البيانات بصورة دائمة.
-# التطبيق الفعلي: غيّري نوع الخادم من لوحة Render إلى Starter المدفوع؛ تبقى البيانات في Turso كما هي.
+# نشر «تسمياتي» على Render — الخطة المدفوعة (نحو 7.25 دولار شهريًا):
+# خادم يعمل دائمًا دون نوم (0.5c-512mb = 7$) + قرص دائم 1 جيجابايت لقاعدة البيانات (0.25$).
+# 1 جيجابايت يكفي آلاف الطالبات؛ يمكن زيادته لاحقًا من لوحة Render ولا يمكن إنقاصه.
 services:
   - type: web
     name: tasmiyati
     runtime: node
-    plan: free
+    plan: 0.5c-512mb
     buildCommand: npm install && npm run build
     startCommand: npm start
     healthCheckPath: /api/health
+    disk:
+      name: tasmiyati-data
+      mountPath: /var/data
+      sizeGB: 1
     envVars:
       - key: NODE_VERSION
         value: "22.14.0"
+      - key: DATA_DIR
+        value: /var/data
       - key: TEACHER_PASSWORD
         sync: false
-      - key: TURSO_DATABASE_URL
-        sync: false
-      - key: TURSO_AUTH_TOKEN
-        sync: false
-      # مفتاح النموذج (اختياري؛ دونه يعمل المساعد في الوضع التجريبي). ضعي أحدهما فقط:
+      # مفتاح النموذج (اختياري؛ دونه يعمل المساعد في الوضع التجريبي، ويمكن إدخاله لاحقًا من لوحة المعلمة).
       # Claude من console.anthropic.com (الموصى به)
       - key: ANTHROPIC_API_KEY
-        sync: false
-      # أو Gemini من Google AI Studio
-      - key: GEMINI_API_KEY
         sync: false
       - key: SESSION_SECRET
         generateValue: true
