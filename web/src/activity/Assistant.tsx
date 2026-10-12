@@ -79,6 +79,7 @@ export function AssistantPanel({ activity, history, blocked, aiMode, stageIcon, 
     <aside className="card assistant" aria-label="المساعد الذكي">
       {head}
       <div className="messages" ref={box} aria-live="polite">
+        <div className="tiny muted" style={{ alignSelf: 'center', textAlign: 'center' }}>أنتِ تحاورين برنامج ذكاء اصطناعي، لا إنسانًا. قد يخطئ أحيانًا، ومعلمتكِ تطّلع على المحادثة. لا تكتبي فيها بيانات شخصية.</div>
         <div className="msg assistant">{as.opening}<span className="meta">رسالة افتتاحية للنشاط</span></div>
         {as.mode !== 'modeling' && as.questions.length > 0 && msgs.length === 0 && (
           <div className="tiny muted" style={{ alignSelf: 'center', textAlign: 'center' }}>اكتبي ردكِ ليبدأ الحوار. سيطرح المساعد سؤالًا واحدًا في كل مرة.</div>
