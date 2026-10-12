@@ -64,7 +64,7 @@ export function Settings() {
         <div className="card-title"><Icon name="chat" /> ربط المساعد بنموذج الذكاء الاصطناعي</div>
         <Alert kind={d.ai.keyConfigured && d.ai.enabled ? 'ok' : 'warn'}>
           {d.ai.keyConfigured && d.ai.enabled
-            ? <>المساعد متصل عبر الخادم بالمزود <b>{({ anthropic: 'Anthropic (Claude)', gemini: 'Google Gemini', openai: 'OpenAI' } as any)[d.ai.provider] ?? d.ai.provider}</b> والنموذج <b className="ltr">{d.ai.model}</b>. المفتاح محفوظ في الخادم فقط ({d.ai.keySource === 'env' ? 'من متغير البيئة' : 'من الإعدادات'}، ينتهي بـ <span className="ltr">{d.ai.keyHint}</span>).</>
+            ? <>المساعد متصل عبر الخادم بالمزود <b>{d.ai.provider === 'openai' && /openrouter\.ai/.test(d.ai.baseUrl ?? '') ? 'OpenRouter' : (({ anthropic: 'Anthropic (Claude)', gemini: 'Google Gemini', openai: 'OpenAI' } as any)[d.ai.provider] ?? d.ai.provider)}</b> والنموذج <b className="ltr">{d.ai.model}</b>. المفتاح محفوظ في الخادم فقط ({d.ai.keySource === 'env' ? 'من متغير البيئة' : 'من الإعدادات'}، ينتهي بـ <span className="ltr">{d.ai.keyHint}</span>).</>
             : d.ai.enabled ? 'لم يُضبط مفتاح API بعد؛ يعمل المساعد في «وضع تجريبي غير متصل بالنموذج» يعرض تسلسل الأسئلة فقط ولا يقيّم الإجابات.' : 'المساعد معطل.'}
         </Alert>
         <div className="row" style={{ marginTop: 12, alignItems: 'flex-end' }}>
