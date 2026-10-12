@@ -9,13 +9,24 @@ export class AIError extends Error {
   }
 }
 
-const DEFAULTS = { enabled: true, provider: 'anthropic' as const, model: 'claude-sonnet-5-5', baseUrl: 'https://api.openai.com/v1', maxTokens: 700 };
+type Provider = 'anthropic' | 'openai' | 'gemini';
+const DEFAULTS = { enabled: true, baseUrl: 'https://api.openai.com/v1', maxTokens: 700 };
+export const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/openai';
+export const DEFAULT_MODELS: Record<Provider, string> = { anthropic: 'claude-sonnet-5-5', openai: 'gpt-5', gemini: 'gemini-3.8-flash' };
 
-interface StoredAI { enabled?: boolean; provider?: 'anthropic' | 'openai'; model?: string; baseUrl?: string; maxTokens?: number; apiKey?: string }
+interface StoredAI { enabled?: boolean; provider?: Provider; model?: string; baseUrl?: string; maxTokens?: number; apiKey?: string }
 
-function resolveKey(s: StoredAI): { key: string; source: 'settings' | 'env' | 'none' } {
+function resolveProvider(s: StoredAI): Provider {
+  if (s.provider) return s.provider;
+  const envP = process.env.AI_PROVIDER as Provider | undefined;
+  if (envP && envP in DEFAULT_MODELS) return envP;
+  if (process.env.GEMINI_API_KEY && !process.env.ANTHROPIC_API_KEY) return 'gemini';
+  return 'anthropic';
+}
+
+function resolveKey(s: StoredAI, provider: Provider): { key: string; source: 'settings' | 'env' | 'none' } {
   if (s.apiKey) return { key: s.apiKey, source: 'settings' };
-  const env = (s.provider ?? DEFAULTS.provider) === 'openai' ? process.env.OPENAI_API_KEY : process.env.ANTHROPIC_API_KEY;
+  const env = provider === 'openai' ? process.env.OPENAI_API_KEY : provider === 'gemini' ? process.env.GEMINI_API_KEY : process.env.ANTHROPIC_API_KEY;
   if (env) return { key: env, source: 'env' };
   return { key: '', source: 'none' };
 }
@@ -23,12 +34,13 @@ function resolveKey(s: StoredAI): { key: string; source: 'settings' | 'env' | 'n
 /** إعدادات النموذج كما تُعرض للمعلمة — لا يُرسَل المفتاح أبدًا إلى المتصفح */
 export function getAIConfig(): AIConfiguration {
   const s = getSetting<StoredAI>('ai', {});
-  const { key, source } = resolveKey(s);
+  const provider = resolveProvider(s);
+  const { key, source } = resolveKey(s, provider);
   return {
     enabled: s.enabled ?? DEFAULTS.enabled,
-    provider: s.provider ?? (process.env.AI_PROVIDER as any) ?? DEFAULTS.provider,
-    model: s.model ?? process.env.AI_MODEL ?? DEFAULTS.model,
-    baseUrl: s.baseUrl ?? process.env.AI_BASE_URL ?? DEFAULTS.baseUrl,
+    provider,
+    model: s.model ?? process.env.AI_MODEL ?? DEFAULT_MODELS[provider],
+    baseUrl: provider === 'gemini' ? GEMINI_BASE_URL : s.baseUrl ?? process.env.AI_BASE_URL ?? DEFAULTS.baseUrl,
     maxTokens: s.maxTokens ?? DEFAULTS.maxTokens,
     keyConfigured: !!key,
     keyHint: key ? `…${key.slice(-4)}` : '',
@@ -151,7 +163,7 @@ export async function callModel(system: string, messages: ChatTurn[], opts: { ma
   const s = getSetting<StoredAI>('ai', {});
   const cfg = getAIConfig();
   if (!cfg.enabled) throw new AIError('disabled', 'المساعد الذكي معطل من إعدادات المعلمة.');
-  const { key } = resolveKey(s);
+  const { key } = resolveKey(s, resolveProvider(s));
   if (!key) throw new AIError('not_configured', 'لم يُضبط مفتاح الوصول إلى النموذج بعد.');
 
   // يجب أن تبدأ المحادثة برسالة من المستخدم وتتناوب الأدوار
@@ -177,11 +189,19 @@ export async function callModel(system: string, messages: ChatTurn[], opts: { ma
         body: JSON.stringify({ model: cfg.model, max_tokens: maxTokens, system, messages: msgs }),
       });
     } else {
-      res = await fetch(`${cfg.baseUrl.replace(/\/$/, '')}/chat/completions`, {
+      // Gemini عبر واجهته المتوافقة مع OpenAI: تفكير منخفض، ومساحة إضافية لأن رموز التفكير تُحتسب من حد الرد
+      const gem = cfg.provider === 'gemini';
+      const base = process.env.GEMINI_BASE_URL && gem ? process.env.GEMINI_BASE_URL : cfg.baseUrl;
+      res = await fetch(`${base.replace(/\/$/, '')}/chat/completions`, {
         method: 'POST',
         signal: controller.signal,
         headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
-        body: JSON.stringify({ model: cfg.model, max_tokens: maxTokens, messages: [{ role: 'system', content: system }, ...msgs] }),
+        body: JSON.stringify({
+          model: cfg.model,
+          max_tokens: gem ? maxTokens + 1500 : maxTokens,
+          ...(gem ? { reasoning_effort: 'low' } : {}),
+          messages: [{ role: 'system', content: system }, ...msgs],
+        }),
       });
     }
     if (res.status === 401 || res.status === 403) throw new AIError('auth', 'رفض مزود النموذج مفتاح الوصول. راجعي الإعدادات.');

@@ -11,7 +11,7 @@ import path from 'node:path';
 const PORT = 3200 + Math.floor(Math.random() * 500);
 const BASE = `http://localhost:${PORT}`;
 const DATA = fs.mkdtempSync(path.join(os.tmpdir(), 'tasmiyati-test-'));
-let server, mock, mockPort, lastMockRequest = null, mockMode = 'chat';
+let server, mock, mockPort, lastMockRequest = null, lastMockMeta = null, mockMode = 'chat';
 
 class Client {
   cookie = '';
@@ -44,6 +44,7 @@ before(async () => {
     req.on('data', (c) => (b += c));
     req.on('end', () => {
       lastMockRequest = JSON.parse(b);
+      lastMockMeta = { url: req.url, auth: req.headers.authorization };
       const content = mockMode === 'feedback'
         ? JSON.stringify({ criteria: [{ id: 'c2', observation: 'الموضوع ما زال واسعًا.', where: 'الرياضة', question: 'ما الجانب الذي تريدين التركيز عليه؟' }], strength: 'حددتِ المجال بوضوح.', nextStep: 'ضيّقي الموضوع.' })
         : 'ردّ من النموذج الوهمي: ما المشكلة التي واجهت سارة؟';
@@ -55,7 +56,7 @@ before(async () => {
   mockPort = mock.address().port;
 
   server = spawn(process.execPath, ['--disable-warning=ExperimentalWarning', process.env.SERVER_JS || 'dist/server.js'], {
-    env: { ...process.env, PORT: String(PORT), DATA_DIR: DATA, TEACHER_PASSWORD: 'test-pass-123', ANTHROPIC_API_KEY: '', OPENAI_API_KEY: '' },
+    env: { ...process.env, PORT: String(PORT), DATA_DIR: DATA, TEACHER_PASSWORD: 'test-pass-123', ANTHROPIC_API_KEY: '', OPENAI_API_KEY: '', GEMINI_API_KEY: '', GEMINI_BASE_URL: `http://localhost:${mockPort}/gemini/v1beta/openai` },
     stdio: 'pipe',
   });
   await new Promise((resolve, reject) => {
@@ -281,6 +282,26 @@ test('التغذية الراجعة الذكية تُحلَّل وفق المع�
   assert.ok(lastMockRequest.messages[1].content.includes('تقويمها الذاتي'));
   const a = await s1.get('/api/activities/1-8');
   assert.equal(a.data.evaluation.feedback.length, 1);
+});
+
+test('ربط Gemini: عنوان الخدمة ثابت، والمفتاح عبر الخادم، والنموذج الافتراضي مناسب', async () => {
+  mockMode = 'chat';
+  const set = await teacher.put('/api/teacher/settings', { ai: { provider: 'gemini', model: 'mock-model', apiKey: 'AIza-gemini-key-9876', enabled: true } });
+  assert.equal(set.data.ai.provider, 'gemini');
+  assert.equal(set.data.ai.model, 'gemini-3.8-flash'); // اسم نموذج لا يخص Gemini يُستبدل بالافتراضي
+  assert.ok(set.data.ai.baseUrl.startsWith('https://generativelanguage.googleapis.com/'));
+  assert.ok(!JSON.stringify(set.data).includes('AIza-gemini'));
+  const r = await s2.post('/api/activities/1-1/chat', { message: 'سؤال إلى Gemini' });
+  assert.equal(r.status, 200);
+  assert.equal(r.data.mode, 'ai');
+  assert.equal(lastMockMeta.url, '/gemini/v1beta/openai/chat/completions');
+  assert.equal(lastMockMeta.auth, 'Bearer AIza-gemini-key-9876');
+  assert.equal(lastMockRequest.model, 'gemini-3.8-flash');
+  assert.equal(lastMockRequest.reasoning_effort, 'low');
+  assert.ok(lastMockRequest.messages[0].content.includes('صديقتي المحفزة للكتابة'));
+  // تبديل المزود يحذف مفتاح المزود السابق
+  const back = await teacher.put('/api/teacher/settings', { ai: { provider: 'openai', baseUrl: `http://localhost:${mockPort}/v1`, model: 'mock-model', apiKey: 'sk-secret-key-1234' } });
+  assert.equal(back.data.ai.keyHint, '…1234');
 });
 
 test('فشل الاتصال بالنموذج يعطي رسالة واضحة ولا يضيع شيئًا', async () => {

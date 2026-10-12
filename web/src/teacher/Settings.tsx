@@ -3,6 +3,8 @@ import { api } from '../api';
 import { Icon } from '../icons';
 import { Alert, ErrorBox, Loading, downloadUrl, fmtDate, useApp } from '../ui';
 
+const DEFAULT_MODELS: Record<string, string> = { anthropic: 'claude-sonnet-5-5', gemini: 'gemini-3.8-flash', openai: 'gpt-5' };
+
 export function Settings() {
   const { toast } = useApp();
   const [d, setD] = useState<any>(null);
@@ -62,13 +64,14 @@ export function Settings() {
         <div className="card-title"><Icon name="chat" /> ربط المساعد بنموذج الذكاء الاصطناعي</div>
         <Alert kind={d.ai.keyConfigured && d.ai.enabled ? 'ok' : 'warn'}>
           {d.ai.keyConfigured && d.ai.enabled
-            ? <>المساعد متصل عبر الخادم بالمزود <b>{d.ai.provider}</b> والنموذج <b className="ltr">{d.ai.model}</b>. المفتاح محفوظ في الخادم فقط ({d.ai.keySource === 'env' ? 'من متغير البيئة' : 'من الإعدادات'}، ينتهي بـ <span className="ltr">{d.ai.keyHint}</span>).</>
+            ? <>المساعد متصل عبر الخادم بالمزود <b>{({ anthropic: 'Anthropic (Claude)', gemini: 'Google Gemini', openai: 'OpenAI' } as any)[d.ai.provider] ?? d.ai.provider}</b> والنموذج <b className="ltr">{d.ai.model}</b>. المفتاح محفوظ في الخادم فقط ({d.ai.keySource === 'env' ? 'من متغير البيئة' : 'من الإعدادات'}، ينتهي بـ <span className="ltr">{d.ai.keyHint}</span>).</>
             : d.ai.enabled ? 'لم يُضبط مفتاح API بعد؛ يعمل المساعد في «وضع تجريبي غير متصل بالنموذج» يعرض تسلسل الأسئلة فقط ولا يقيّم الإجابات.' : 'المساعد معطل.'}
         </Alert>
         <div className="row" style={{ marginTop: 12, alignItems: 'flex-end' }}>
           <label className="field"><span className="field-label">المزود</span>
-            <select className="input" value={ai.provider} onChange={(e) => setAi({ ...ai, provider: e.target.value })}>
+            <select className="input" value={ai.provider} onChange={(e) => setAi({ ...ai, provider: e.target.value, model: DEFAULT_MODELS[e.target.value] })}>
               <option value="anthropic">Anthropic (Claude)</option>
+              <option value="gemini">Google Gemini</option>
               <option value="openai">واجهة متوافقة مع OpenAI</option>
             </select>
           </label>
@@ -78,8 +81,11 @@ export function Settings() {
         </div>
         <label className="field" style={{ marginTop: 10 }}>
           <span className="field-label">مفتاح API {d.ai.keyConfigured && <span className="tiny muted">(مضبوط — اتركيه فارغًا للإبقاء عليه)</span>}</span>
-          <input className="input ltr" type="password" autoComplete="off" value={key} onChange={(e) => setKey(e.target.value)} placeholder="sk-..." />
-          <span className="field-help">يُرسل إلى الخادم ويُحفظ فيه، ولا يعود إلى المتصفح أبدًا. يمكن بدلًا من ذلك ضبطه بمتغير البيئة ANTHROPIC_API_KEY.</span>
+          <input className="input ltr" type="password" autoComplete="off" value={key} onChange={(e) => setKey(e.target.value)} placeholder={ai.provider === 'gemini' ? 'AIza...' : 'sk-...'} />
+          <span className="field-help">
+            يُرسل إلى الخادم ويُحفظ فيه، ولا يعود إلى المتصفح أبدًا. يمكن بدلًا من ذلك ضبطه بمتغير البيئة {ai.provider === 'gemini' ? 'GEMINI_API_KEY' : ai.provider === 'openai' ? 'OPENAI_API_KEY' : 'ANTHROPIC_API_KEY'}.
+            {ai.provider === 'gemini' && <> يُنشأ مفتاح Gemini من Google AI Studio (aistudio.google.com).</>}
+          </span>
         </label>
         <label className="row small" style={{ marginTop: 8 }}><input type="checkbox" checked={!!ai.enabled} onChange={(e) => setAi({ ...ai, enabled: e.target.checked })} /> تفعيل المساعد الذكي</label>
         <div className="row" style={{ marginTop: 10 }}>
@@ -88,6 +94,12 @@ export function Settings() {
           {d.ai.keySource === 'settings' && <button className="btn ghost" onClick={() => api('/api/teacher/settings', { method: 'PUT', body: { ai: { clearKey: true } } }).then(load)}>حذف المفتاح المحفوظ</button>}
         </div>
         {test && <div style={{ marginTop: 10 }}><Alert kind={test.ok ? 'ok' : 'danger'}>{test.ok ? <>نجح الاتصال ({test.ms} ملّي ثانية). رد النموذج: «{test.reply}»</> : test.error}</Alert></div>}
+        {ai.provider === 'gemini' && (
+          <div style={{ marginTop: 10 }}><Alert kind="warn">
+            شروط Gemini API تشترط أن يكون المستخدم 18 عامًا فأكثر، ولا تجيز استخدامه في خدمة موجهة لمن هم دون 18 أو يُرجّح أن يستخدموها. وفي الفئة المجانية قد تُستخدم المدخلات لتحسين منتجات Google ويطّلع عليها مراجعون بشريون.
+            مناسب لفترة التحكيم مع محكّمين بالغين. قبل التطبيق مع الطالبات راجعي الشروط وموافقة جهتكِ التعليمية، أو بدّلي المزود من هذه القائمة.
+          </Alert></div>
+        )}
         <p className="tiny muted" style={{ marginTop: 10 }}>تنبيه: قد يكون المستخدمون دون الثامنة عشرة. تحققي من شروط مزود النموذج وسياسات مؤسستكِ التعليمية قبل التفعيل، ومن إعدادات المزود الخاصة بعدم استخدام البيانات في التدريب.</p>
       </section>
 

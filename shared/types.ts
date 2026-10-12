@@ -144,7 +144,7 @@ export interface Lesson {
 
 export interface AIConfiguration {
   enabled: boolean;
-  provider: 'anthropic' | 'openai';
+  provider: 'anthropic' | 'openai' | 'gemini';
   model: string;
   baseUrl: string; // لمزود متوافق مع OpenAI
   maxTokens: number;

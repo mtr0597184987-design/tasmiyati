@@ -18,7 +18,8 @@ services:
         sync: false
       - key: TURSO_AUTH_TOKEN
         sync: false
-      - key: ANTHROPIC_API_KEY
+      # مفتاح Gemini من Google AI Studio (اختياري؛ دونه يعمل المساعد في الوضع التجريبي)
+      - key: GEMINI_API_KEY
         sync: false
       - key: SESSION_SECRET
         generateValue: true

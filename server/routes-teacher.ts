@@ -297,8 +297,13 @@ route('PUT', '/api/teacher/settings', 'teacher', (c) => {
     const cur = getSetting<any>('ai', {});
     const next = { ...cur };
     if (typeof b.ai.enabled === 'boolean') next.enabled = b.ai.enabled;
-    if (['anthropic', 'openai'].includes(b.ai.provider)) next.provider = b.ai.provider;
+    if (['anthropic', 'openai', 'gemini'].includes(b.ai.provider) && b.ai.provider !== cur.provider) {
+      next.provider = b.ai.provider;
+      if (cur.provider) { delete next.model; delete next.apiKey; } // مفتاح مزود لا يصلح لغيره
+    }
     if (typeof b.ai.model === 'string' && b.ai.model.trim()) next.model = b.ai.model.trim().slice(0, 100);
+    if (next.provider === 'gemini' && next.model && !/^gemini|^gemma/i.test(next.model)) delete next.model;
+    if ((next.provider ?? 'anthropic') === 'anthropic' && next.model && !/^claude/i.test(next.model)) delete next.model;
     if (typeof b.ai.baseUrl === 'string' && /^https?:\/\//.test(b.ai.baseUrl)) next.baseUrl = b.ai.baseUrl.trim();
     if (Number(b.ai.maxTokens) >= 100 && Number(b.ai.maxTokens) <= 4000) next.maxTokens = Number(b.ai.maxTokens);
     if (typeof b.ai.apiKey === 'string' && b.ai.apiKey.trim()) next.apiKey = b.ai.apiKey.trim(); // يُحفظ في الخادم فقط
