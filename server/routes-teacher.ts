@@ -8,6 +8,7 @@ import { callModel, formatValue, getAIConfig, AIError } from './ai.ts';
 import { portfolioData } from './portfolio.ts';
 import { replicaStatus } from './replica.ts';
 import { activityCriteria, getRatings, ratingScale, saveRatings } from './ratings.ts';
+import { classAnalytics, studentAnalytics } from './analytics.ts';
 
 function audit(actor: number, action: string, target = '') {
   run('INSERT INTO audit_log(actor_id, action, target) VALUES(?,?,?)', actor, action, target);
@@ -334,6 +335,13 @@ route('PUT', '/api/teacher/activities/:id/scale', 'teacher', (c) => {
 route('DELETE', '/api/teacher/activities/:id/scale', 'teacher', (c) => {
   run('DELETE FROM settings WHERE key = ?', `scale:${c.params.id}`);
   return { ok: true };
+});
+
+// ---------- التقارير ----------
+route('GET', '/api/teacher/analytics', 'teacher', () => classAnalytics());
+route('GET', '/api/teacher/analytics/student/:id', 'teacher', (c) => {
+  const s = studentOr404(c.params.id);
+  return { student: { id: s.id, code: s.code, label: s.label, name: s.real_name ?? null }, ...studentAnalytics(s.id) };
 });
 
 // ---------- التصفير ----------

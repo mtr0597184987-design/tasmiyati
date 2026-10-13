@@ -7,10 +7,12 @@ import { Sharing } from './Sharing';
 import { Content } from './Content';
 import { Settings } from './Settings';
 import { Ratings } from './Ratings';
+import { Analytics } from './Analytics';
 
 const TABS = [
   { id: '', label: 'الطالبات والتقدم', icon: 'users' },
   { id: 'ratings', label: 'سلالم التقدير', icon: 'star' },
+  { id: 'analytics', label: 'التقارير', icon: 'spark' },
   { id: 'sharing', label: 'المشاركة والتعليقات', icon: 'share' },
   { id: 'content', label: 'المحتوى والحصص', icon: 'book' },
   { id: 'settings', label: 'الإعدادات والتصدير', icon: 'settings' },
@@ -35,6 +37,7 @@ export function TeacherDashboard({ route }: { route: string[] }) {
         </div>
         {tab === 'student' && id ? <StudentDetail id={id} /> :
           tab === 'ratings' ? <Ratings /> :
+          tab === 'analytics' ? <Analytics studentId={id} /> :
           tab === 'sharing' ? <Sharing /> :
           tab === 'content' ? <Content /> :
           tab === 'settings' ? <Settings /> : <Students />}

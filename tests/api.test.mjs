@@ -446,3 +446,34 @@ test('التصفير: يتطلب كلمة المرور والتأكيد، ويُ
   assert.ok(JSON.stringify(content.data).includes('تبقى بعد التصفير'));
   await teacher.req('DELETE', '/api/teacher/activities/1-2/assistant');
 });
+
+test('التقارير: صورة الصف وتقرير الطالبة من تقديرات المعلمة فقط', async () => {
+  const made = (await teacher.post('/api/teacher/students', { names: ['أولى', 'ثانية'] })).data.created;
+  const ov = (await teacher.get('/api/teacher/overview')).data.students;
+  const [a, b] = made.map((m) => ov.find((s) => s.code === m.code).id);
+  const st = new Client();
+  await st.post('/api/auth/student', { code: made[0].code });
+  await st.post('/api/activities/1-1/open'); // تفتح النشاط
+  const crit = (await teacher.get('/api/teacher/ratings/1-1')).data.criteria;
+  await teacher.put(`/api/teacher/students/${a}/ratings`, { activityId: '1-1', values: { [crit[0].id]: 4, [crit[1].id]: 4 } });
+  await teacher.put(`/api/teacher/students/${b}/ratings`, { activityId: '1-1', values: { [crit[0].id]: 2, [crit[1].id]: 1 } });
+  const c = (await teacher.get('/api/teacher/analytics')).data;
+  assert.equal(c.totals.students, 2);
+  assert.equal(c.totals.ratingsCount, 4);
+  assert.equal(c.totals.avgRating, 2.75);
+  assert.equal(c.lessonRatings[0].avg, 2.75);
+  assert.equal(c.lessonRatings[1].avg, null);
+  assert.equal(c.lessonProgress[0].inProgress + c.lessonProgress[0].notStarted + c.lessonProgress[0].completed, 2);
+  const skill1 = c.skillRatings.find((k) => k.id === 1);
+  assert.equal(skill1.avg, 3); // البند الأول مرتبط بالمهارة 1: (4+2)/2
+  assert.equal(c.distribution.find((x) => x.value === 4).count, 2);
+  const sa = (await teacher.get(`/api/teacher/analytics/student/${a}`)).data;
+  assert.equal(sa.summary.avgRating, 4);
+  assert.equal(sa.summary.classAvg, 2.75);
+  assert.equal(sa.timeline[0].avg, 4);
+  assert.ok(sa.timeline[0].openedAt);
+  assert.ok(sa.strengths.some((k) => k.id === 1));
+  const sb = (await teacher.get(`/api/teacher/analytics/student/${b}`)).data;
+  assert.ok(sb.needs.length >= 1);
+  assert.equal((await st.get('/api/teacher/analytics')).status, 403);
+});

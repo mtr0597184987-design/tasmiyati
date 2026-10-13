@@ -120,6 +120,13 @@ export function TopBar({ children }: { children?: ReactNode }) {
 
 export const STAGE_COLORS = ['', 'var(--s1)', 'var(--s2)', 'var(--s3)', 'var(--s4)', 'var(--s5)', 'var(--s6)', 'var(--s7)'];
 
+export function fmtDay(s?: string | null) {
+  if (!s) return '—';
+  const d = new Date(s.includes('T') ? s : s.replace(' ', 'T') + 'Z');
+  if (isNaN(d.getTime())) return s;
+  return d.toLocaleDateString('ar', { day: 'numeric', month: 'short', year: 'numeric', numberingSystem: 'latn' } as any);
+}
+
 export function fmtDate(s?: string | null) {
   if (!s) return '';
   const d = new Date(s.includes('T') ? s : s.replace(' ', 'T') + 'Z');
