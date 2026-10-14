@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Activity, Lesson, Material, WorksheetSection } from '../../../shared/types';
 import { api, readDraft, writeDraft } from '../api';
 import { Icon } from '../icons';
-import { Alert, ErrorBox, Loading, Modal, STAGE_COLORS, fmtDate, useApp } from '../ui';
+import { Alert, ErrorBox, Loading, Modal, STAGE_COLORS, fmtDate, taskNo, useApp } from '../ui';
 import { Materials } from './Materials';
 import { Worksheet } from './Worksheet';
 import { AssistantPanel } from './Assistant';
@@ -189,7 +189,7 @@ export function ActivityView({ lesson, activity: a, catalog, status, preview, po
     <div className="pane-work">
       <div className="card">
         <header className="activity-header" style={{ ['--c' as any]: color }}>
-          <div className="eyebrow">{a.homework ? <>النشاط البيتي{lesson.homeworkTitle ? `: ${lesson.homeworkTitle}` : ''}</> : <>المرحلة {ORD[stage.id]}: {stage.name} · المهمة ({a.id}){a.minutes ? ` · ${a.minutes} ${a.minutes > 10 ? 'دقيقة' : 'دقائق'}` : ''}</>}</div>
+          <div className="eyebrow">{a.homework ? <>النشاط البيتي{lesson.homeworkTitle ? `: ${lesson.homeworkTitle}` : ''}</> : <>المرحلة {ORD[stage.id]}: {stage.name} · المهمة ({taskNo(a.id)}){a.minutes ? ` · ${a.minutes} ${a.minutes > 10 ? 'دقيقة' : 'دقائق'}` : ''}</>}</div>
           <h2>{a.title}</h2>
           {a.goal && <div className="goal"><b>هدف المهمة: </b>{a.goal}</div>}
           <div className="skill-pills">

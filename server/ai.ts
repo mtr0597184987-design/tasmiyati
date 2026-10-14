@@ -153,7 +153,7 @@ ${c.style}
 
 ## سياق النشاط الحالي
 - الحصة ${lesson.number}: ${lesson.title} (الدرس المقرر: ${lesson.courseLesson.title}).
-- ${a.homework ? 'النشاط البيتي' : 'المهمة'} (${a.id}): ${a.title}.
+- ${a.homework ? 'النشاط البيتي' : 'المهمة'} (${a.id.replace('-', '\u200F-\u200F')}): ${a.title}.
 - خطوة الاستراتيجية: ${stage.id}. ${stage.name} — وظيفتها: ${stage.assistantFunction}
 ${a.minutes ? `- زمن المهمة: ${a.minutes} دقائق.\n` : ''}${a.goal ? `- هدف النشاط: ${a.goal}` : ''}
 - المهارات المستهدفة: ${a.skills.map((s) => `(${s}) ${skillText(s)}`).join(' ')}

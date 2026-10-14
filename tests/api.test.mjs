@@ -264,7 +264,7 @@ test('ربط النموذج عبر الخادم: التعليمات تُبنى �
   const sys = lastMockRequest.messages[0].content;
   assert.ok(sys.includes('رفيقة التحفيز'));
   assert.ok(sys.includes('التحفيز الذكي'));
-  assert.ok(sys.includes('المهمة (1-1): قبل أن أكتب، ماذا أختار؟'));
+  assert.ok(sys.includes('المهمة (1\u200F-\u200F1): قبل أن أكتب، ماذا أختار؟'));
   assert.ok(sys.includes('نشاط (1): ساعدي سارة على اتخاذ القرار'));
   assert.ok(sys.includes('لاحظت سارة أن بعض الطالبات يشتكين من قلة تنوع الأصناف'));
   assert.ok(sys.includes('خاطبي الطالبة بصيغة المؤنث'));

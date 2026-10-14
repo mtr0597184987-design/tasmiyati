@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../api';
 import { Icon } from '../icons';
 import { go } from '../router';
-import { Alert, ErrorBox, Loading, Modal, fmtDate, useApp } from '../ui';
+import { Alert, ErrorBox, Loading, Modal, fmtDate, useApp, taskNo } from '../ui';
 
 export interface ScaleLevel { value: number; label: string }
 export interface Criterion { id: string; text: string }
@@ -113,7 +113,7 @@ export function Ratings() {
           </label>
           <label className="small row grow">النشاط:
             <select className="input" style={{ minHeight: 36 }} value={activityId} onChange={(e) => setActivityId(e.target.value)}>
-              {lesson?.activities.map((a: any) => <option key={a.id} value={a.id}>{a.homework ? 'النشاط البيتي: ' : `(${a.id}) `}{a.title}</option>)}
+              {lesson?.activities.map((a: any) => <option key={a.id} value={a.id}>{a.homework ? 'النشاط البيتي: ' : `(${taskNo(a.id)}) `}{a.title}</option>)}
             </select>
           </label>
         </div>
@@ -122,7 +122,7 @@ export function Ratings() {
       {!d ? <Loading /> : (
         <section className="card">
           <div className="row between">
-            <b>({d.activity.id}) {d.activity.title}</b>
+            <b>({taskNo(d.activity.id)}) {d.activity.title}</b>
             <span className="row" style={{ gap: 6 }}>
               {d.custom && <span className="badge info">بنود معدّلة</span>}
               <button className="btn sm" onClick={() => setEditing(d.criteria.map((c: Criterion) => ({ ...c })))}><Icon name="edit" size={15} /> تعديل بنود السلم</button>

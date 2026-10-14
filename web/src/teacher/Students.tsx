@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../api';
 import { Icon } from '../icons';
 import { go } from '../router';
-import { Alert, ErrorBox, Loading, fmtDate, useApp } from '../ui';
+import { Alert, ErrorBox, Loading, fmtDate, useApp, taskNo } from '../ui';
 
 const STATUS_LABEL: Record<string, string> = { completed: 'مكتمل', in_progress: 'قيد الإنجاز', available: 'متاح', locked: 'مقفل' };
 
@@ -60,7 +60,7 @@ export function Students() {
               <thead>
                 <tr>
                   <th>الطالبة</th>
-                  {lesson.activities.map((a: any) => <th key={a.id} className="cell" title={a.title}>{a.id}</th>)}
+                  {lesson.activities.map((a: any) => <th key={a.id} className="cell" title={a.title}>{taskNo(a.id)}</th>)}
                   <th>آخر نشاط</th><th />
                 </tr>
               </thead>

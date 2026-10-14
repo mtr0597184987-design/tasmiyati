@@ -153,3 +153,10 @@ export function PreviewBar() {
     </div>
   );
 }
+
+/** رقم المهمة للعرض: الرقم الأول للحصة والثاني لترتيب المهمة، ويُقرأ من اليمين (علامتا اتجاه حول الشرطة) */
+export function taskNo(id: string): string {
+  const [l, t] = String(id).split('-');
+  if (t === 'H') return 'البيتي';
+  return t ? `${l}\u200F-\u200F${t}` : String(id);
+}

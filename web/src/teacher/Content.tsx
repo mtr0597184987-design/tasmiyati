@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../api';
 import { Icon } from '../icons';
 import { href } from '../router';
-import { Alert, ErrorBox, Loading, Modal, useApp } from '../ui';
+import { Alert, ErrorBox, Loading, Modal, useApp, taskNo } from '../ui';
 
 export function Content() {
   const { toast } = useApp();
@@ -55,7 +55,7 @@ export function Content() {
                 <tbody>
                   {l.activities.map((a: any) => (
                     <tr key={a.id}>
-                      <td>{a.homework ? 'النشاط البيتي: ' : `(${a.id}) `}{a.title}</td>
+                      <td>{a.homework ? 'النشاط البيتي: ' : `(${taskNo(a.id)}) `}{a.title}</td>
                       <td className="small">{a.homework ? 'بيتي' : a.stage}</td>
                       <td className="small">{a.assistant.name}{l.overridden.includes(a.id) && <span className="badge info" style={{ marginInlineStart: 4 }}>معدّل</span>}</td>
                       <td className="small">{a.skills.join('، ')}</td>
@@ -115,7 +115,7 @@ function AssistantEditor({ ctx, onClose, onSaved }: { ctx: any; onClose: () => v
     <label className="field"><span className="field-label">{label}</span><textarea className="textarea" rows={rows} value={f[k]} onChange={(e) => setF({ ...f, [k]: e.target.value })} />{help && <span className="field-help">{help}</span>}</label>
   );
   return (
-    <Modal title={`تعليمات المساعد — النشاط (${ctx.activity.id})`} onClose={onClose}
+    <Modal title={`تعليمات المساعد — المهمة (${taskNo(ctx.activity.id)})`} onClose={onClose}
       footer={<><button className="btn" onClick={reset}>استعادة الأصل</button><button className="btn primary" onClick={save}>حفظ</button></>}>
       <div className="stack">
         <Alert kind="info">تُدمج هذه التعليمات تلقائيًا مع القواعد الإلزامية للمساعد وبيانات النشاط (الخطوة، والهدف، والمهارات، ومؤشرات الدافعية). التلميحات المرتبطة بكل سؤال تبقى كما في ملف المحتوى.</Alert>

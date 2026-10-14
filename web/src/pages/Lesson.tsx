@@ -4,7 +4,7 @@ import type { Lesson } from '../../../shared/types';
 import { api } from '../api';
 import { Icon } from '../icons';
 import { go, href } from '../router';
-import { AiBadge, ErrorBox, Loading, Progress, STAGE_COLORS, TopBar, useApp } from '../ui';
+import { AiBadge, ErrorBox, Loading, Progress, STAGE_COLORS, TopBar, taskNo, useApp } from '../ui';
 import { ActivityView } from '../activity/ActivityView';
 import type { Catalog } from './Home';
 
@@ -120,7 +120,7 @@ export function LessonPage({ lessonId, activityId }: { lessonId: string; activit
             {stageActs.map((a) => (
               <button key={a.id} className="activity-tab" role="tab" aria-current={a.id === current.id} disabled={!preview && statuses[a.id] === 'locked'} onClick={() => nav(a.id)}>
                 {statuses[a.id] === 'completed' ? <Icon name="check" size={15} /> : statuses[a.id] === 'locked' ? <Icon name="lock" size={14} /> : null}
-                ({a.id}) {a.title}
+                ({taskNo(a.id)}) {a.title}
               </button>
             ))}
           </div>

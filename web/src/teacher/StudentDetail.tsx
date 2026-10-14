@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../api';
 import { Icon } from '../icons';
 import { go } from '../router';
-import { Alert, ErrorBox, Loading, Modal, fmtDate, useApp } from '../ui';
+import { Alert, ErrorBox, Loading, Modal, fmtDate, useApp, taskNo } from '../ui';
 import { Compare } from '../activity/Evaluation';
 import { Portfolio } from '../pages/Portfolio';
 import { RatingCard } from './Ratings';
@@ -91,7 +91,7 @@ export function StudentDetail({ id }: { id: string }) {
             {l.activities.map((a: any) => (
               <details key={a.id} className="box">
                 <summary>
-                  <span>{a.homework ? 'النشاط البيتي: ' : `(${a.id}) `}{a.title}</span>
+                  <span>{a.homework ? 'النشاط البيتي: ' : `(${taskNo(a.id)}) `}{a.title}</span>
                   <span className="row" style={{ gap: 6 }}>
                     {a.unlockedByTeacher && <span className="badge info">فتحته المعلمة</span>}
                     <span className={`badge ${ST[a.status][1]}`}>{ST[a.status][0]}</span>
@@ -106,7 +106,7 @@ export function StudentDetail({ id }: { id: string }) {
                   <NoteForm onSave={(note, visible) => act(() => api('/api/teacher/notes', { body: { studentId: s.id, activityId: a.id, note, visibleToStudent: visible } }), 'حُفظت الملاحظة.')} />
                   <div className="row">
                     {a.status === 'locked' && <button className="btn sm" onClick={() => act(() => api(`/api/teacher/students/${s.id}/unlock`, { body: { activityId: a.id } }), 'فُتح النشاط للطالبة.')}><Icon name="lock" size={15} /> فتح النشاط لها (تجاوز المتطلبات)</button>}
-                    {a.chatCount > 0 && <button className="btn sm" onClick={() => api<any>(`/api/teacher/students/${s.id}/chat/${a.id}`).then((r) => setChat({ title: `سجل المساعد — ${a.homework ? 'النشاط البيتي' : `(${a.id})`} ${a.title}`, messages: r.messages }))}><Icon name="chat" size={15} /> سجل المساعد ({a.chatCount})</button>}
+                    {a.chatCount > 0 && <button className="btn sm" onClick={() => api<any>(`/api/teacher/students/${s.id}/chat/${a.id}`).then((r) => setChat({ title: `سجل المساعد — ${a.homework ? 'النشاط البيتي' : `(${taskNo(a.id)})`} ${a.title}`, messages: r.messages }))}><Icon name="chat" size={15} /> سجل المساعد ({a.chatCount})</button>}
                   </div>
                 </div>
               </details>
