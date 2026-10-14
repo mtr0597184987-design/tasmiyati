@@ -201,7 +201,7 @@ export function ActivityView({ lesson, activity: a, catalog, status, preview, po
         <details className="box" style={{ marginBottom: 14 }}>
           <summary><span><Icon name="list" size={16} /> {a.homework ? 'ماذا سأفعل في النشاط البيتي؟' : 'ماذا سأفعل في هذه المهمة؟'}</span><Icon name="down" size={16} /></summary>
           <div className="body">
-            {a.studentProcedures.length > 0 && <><h4 style={{ marginTop: 0 }}>إجراءات التنفيذ المرتبطة بالطالبة</h4><ol style={{ margin: 0 }}>{a.studentProcedures.map((p, i) => <li key={i}>{p}</li>)}</ol></>}
+            {a.studentProcedures.length > 0 && <><h4 style={{ marginTop: 0 }}>{a.homework ? 'خطواتي في النشاط البيتي' : 'إجراءات التنفيذ المرتبطة بالطالبة'}</h4><ol style={{ margin: 0 }}>{a.studentProcedures.map((p, i) => <li key={i}>{p}</li>)}</ol></>}
             {a.teacherProcedures && (
               <>
                 <h4 style={{ marginTop: 12 }}>{a.homework ? 'متابعة المعلمة وتقويم النشاط البيتي' : 'إجراءات التنفيذ المرتبطة بالمعلمة'}</h4>

@@ -113,7 +113,7 @@ function buildActivity(lesson, g, t, spec, isHw) {
     skills: ts.skills ?? lesson.skills,
     motivation: ts.motivation ?? d.motivation,
     teacherProcedures: isHw ? g.homework.followup : t.teacher,
-    studentProcedures: isHw ? [] : t.student,
+    studentProcedures: isHw ? (ts.studentSteps ?? []) : t.student, // النشاط البيتي: خطوات للطالبة مشتقة من نصه (الدليل لا يذكرها)
     materials: [],
     assistant: {
       name: ts.name ?? d.name, mode: d.mode, supportLevel: ts.support ?? d.support,
