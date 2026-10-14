@@ -26,6 +26,18 @@ export function AssistantPanel({ activity, history, blocked, aiMode, stageIcon, 
   const color = STAGE_COLORS[activity.stage];
 
   useEffect(() => { box.current?.scrollTo({ top: box.current.scrollHeight, behavior: 'smooth' }); }, [msgs, busy]);
+  // على الجوال تكون اللوحة مخفية عند التحميل؛ فعند ظهورها ننزل إلى آخر رسالة
+  useEffect(() => {
+    const el = box.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    let wasHidden = el.clientHeight === 0;
+    const ro = new ResizeObserver(() => {
+      if (wasHidden && el.clientHeight > 0) el.scrollTop = el.scrollHeight;
+      wasHidden = el.clientHeight === 0;
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   // أزرار المساعد في أنشطة المهمة (مثل «فحص اختياراتي») ترسل طلبها إلى المحادثة نفسها
   const lastInject = useRef(0);
   useEffect(() => {

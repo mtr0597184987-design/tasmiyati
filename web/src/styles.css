@@ -404,12 +404,12 @@ a.lesson-card:hover { border-color: var(--primary); }
 .save-state.error { color: var(--danger); }
 
 /* ---------- المساعد ---------- */
-.assistant { display: flex; flex-direction: column; max-height: calc(100vh - 96px); padding: 0; overflow: hidden; }
+.card.assistant { display: flex; flex-direction: column; max-height: calc(100vh - 96px); padding: 0; overflow: hidden; }
 .assistant-head { padding: 12px 14px; border-bottom: 1px solid var(--line); display: flex; gap: 10px; align-items: center; }
 .avatar { width: 38px; height: 38px; border-radius: 12px; background: var(--c, var(--primary)); color: #fff; display: grid; place-items: center; flex: none; }
 .assistant-name { font-weight: 700; line-height: 1.3; }
 .messages { padding: 14px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 10px; min-height: 220px; background: var(--surface-2); }
-.msg { max-width: 92%; padding: 9px 13px; border-radius: 14px; white-space: pre-wrap; word-wrap: break-word; font-size: .96rem; }
+.msg { flex-shrink: 0; overflow-wrap: anywhere; max-width: 92%; padding: 9px 13px; border-radius: 14px; white-space: pre-wrap; word-wrap: break-word; font-size: .96rem; }
 .msg.assistant { background: var(--surface); border: 1px solid var(--line); align-self: flex-start; border-start-start-radius: 4px; }
 .msg.student { background: var(--primary); color: #fff; align-self: flex-end; border-start-end-radius: 4px; }
 .msg .meta { display: block; font-size: .72rem; opacity: .75; margin-top: 3px; }
@@ -494,7 +494,7 @@ details.box + details.box { margin-top: 8px; }
   .topbar { position: static; }
   .topbar-inner { flex-wrap: wrap; row-gap: 4px; }
   .side-sticky { position: static; }
-  .assistant { max-height: none; }
+  .card.assistant { max-height: none; }
   .messages { max-height: 52vh; }
   .stagebar { display: flex; overflow-x: auto; padding-bottom: 4px; }
   .stage { flex: 0 0 78px; }
