@@ -31,7 +31,7 @@ export type Material =
   | { type: 'modelCard'; title: string; tone: 'strong' | 'weak'; rows: { label: string; value: string }[]; notes?: string[]; proposed?: boolean };
 
 // ---- ورقة العمل ----
-export type FieldType = 'text' | 'textarea' | 'choice' | 'chips' | 'classify' | 'table' | 'ordering' | 'list' | 'outline';
+export type FieldType = 'text' | 'textarea' | 'choice' | 'select' | 'multi' | 'chips' | 'classify' | 'table' | 'ordering' | 'list' | 'outline' | 'planner';
 
 export interface Field {
   id: string;
@@ -45,8 +45,16 @@ export interface Field {
   allowOther?: boolean;
   items?: { id: string; text: string }[];
   categories?: { id: string; name: string }[];
-  rows?: { id: string; label: string }[];
-  columns?: { id: string; label: string }[];
+  rows?: { id: string; label: string; options?: string[] }[]; // options: الخلية قائمة اختيار
+  columns?: { id: string; label: string; options?: string[] }[];
+  rowHeader?: string; // عنوان عمود الصفوف في الجدول
+  optionalRows?: string[]; // صفوف لا يلزم ملؤها (مثل «عنصر إضافي عند الحاجة»)
+  display?: 'buttons' | 'select'; // التصنيف: أزرار أو قائمة منسدلة (المطابقة)
+  max?: number; // الاختيار المتعدد: أقصى عدد
+  checkable?: boolean; // للطالبة: للحقل مفتاح فحص على الخادم
+  checkLabel?: string; // اسم زر الفحص الموضوعي كما في الدليل
+  optionFeedback?: Record<string, string>; // تغذية راجعة لكل بديل في الاختيار من متعدد
+  plannerModes?: PlannerMode[]; // أشكال التخطيط المتاحة في أداة المخطط
   answerKey?: unknown; // لا يُرسل إلى الطالبة
   feedback?: { ok: string; no: string }; // رسالة الفحص الموضوعي بعد المحاولة
   portfolio?: 'goal' | 'reflection';
@@ -62,10 +70,26 @@ export interface Field {
 
 export interface Hint { level: number; kind: string; text: string }
 
+export type PlannerMode = 'table' | 'tree' | 'fishbone';
+export interface PlannerIdea { element: string; idea: string; details: string[]; method: string }
+export interface PlannerValue { mode: PlannerMode | ''; topic: string; ideas: PlannerIdea[] }
+
+/** عناصر محتوى القسم بترتيبها في الدليل: نص، أو جدول عرض، أو مادة، أو مخطط نموذجي، أو موضع الحقول */
+export type SectionItem =
+  | { type: 'p'; text: string }
+  | { type: 'table'; rows: string[][] }
+  | { type: 'material'; material: Material }
+  | { type: 'diagram'; title?: string; mode: PlannerMode; value: PlannerValue }
+  | { type: 'fields' };
+
 export interface WorksheetSection {
   id?: string;
   title: string;
+  number?: number; // رقم النشاط داخل المهمة
   intro?: string;
+  content?: SectionItem[];
+  fieldsHeading?: string; // عنوان مجموعة الحقول (مثل رأس عمود «اختياري المستقل» في الدليل)
+  assist?: { label: string; message: string }; // زر يستدعي المساعد (مثل «فحص اختياراتي»)
   hints?: Hint[];
   hintPolicy?: 'always' | 'after_attempt';
   proposed?: boolean;
@@ -102,10 +126,14 @@ export interface Activity {
   id: string;
   stage: StageId;
   title: string;
-  goal: string;
+  minutes?: number;
+  homework?: boolean; // النشاط البيتي: بعد الخطوة السابعة وخارج ترتيبها
+  completeLabel?: string; // اسم زر الإكمال (مثل «اعتماد موضوعي»)
+  submitLabel?: string; // اسم زر التسليم في الإنتاج المستقل (مثل «تسليم المهمة»)
+  goal?: string;
   skills: number[];
   motivation: string[];
-  expectedOutput: string;
+  expectedOutput?: string;
   teacherProcedures?: string[];
   studentProcedures: string[];
   materials: Material[];
@@ -113,14 +141,14 @@ export interface Activity {
   worksheet: { sections: WorksheetSection[] };
   peer?: { enabled: boolean; prompt: string; fields: string[] };
   independent?: boolean;
-  evaluation?: { sourceActivity: string };
+  evaluation?: { sourceActivity: string; analyzeLabel?: string; selfIntro?: string };
   portfolio?: 'planningCard';
   showProducts?: string[]; // منتجات حصص سابقة تُعرض للطالبة ويطّلع عليها المساعد
   requirements: { fields: string[]; submitted?: boolean; selfAssessment?: boolean; revised?: boolean; revealAll?: boolean };
 }
 
 export interface RubricCriterion { id: string; text: string; skills: number[]; fields: string[] }
-export interface Rubric { levels: { id: string; label: string }[]; criteria: RubricCriterion[] }
+export interface Rubric { header?: string; levels: { id: string; label: string }[]; criteria: RubricCriterion[] }
 
 export interface Lesson {
   id: string;
@@ -136,6 +164,13 @@ export interface Lesson {
   integratedSkills?: number[];
   skillsNote?: string;
   finalOutput: string;
+  overview?: string; // أولًا: فكرة عامة عن الدرس
+  objectivesIntro?: string;
+  objectives?: string[]; // ثانيًا: الأهداف التعليمية
+  skillsText?: string; // مهارات الكتابة كما وردت في الدليل
+  productLabel?: string; // «المنتج الكتابي» أو «التطبيق الكتابي»
+  homeworkTitle?: string;
+  homeworkFollowup?: string[]; // متابعة المعلمة وتقويم النشاط البيتي
   productFields?: Field[]; // تُشتق تلقائيًا من حقول نشاط الإنتاج المستقل
   rubric?: Rubric;
   authoringNote?: string;

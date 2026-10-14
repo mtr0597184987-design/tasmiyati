@@ -11,6 +11,8 @@
     "start": "node --disable-warning=ExperimentalWarning dist/server.js",
     "start:dev": "tsx server/index.ts",
     "validate": "tsx scripts/validate-content.ts",
+    "lessons": "node scripts/build-lessons.mjs",
+    "check-guide": "node scripts/check-guide.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "node --test tests/api.test.mjs tests/replica.test.mjs"
   },

@@ -4,6 +4,9 @@ import path from 'node:path';
 import type { Activity, Lesson, MotivationDimension, Rubric, Skill, StrategyStage, Field } from '../shared/types.ts';
 import { all, get, parse } from './db.ts';
 
+/** يُرفع عند استبدال بنية الحصص؛ تُمسح عندها تعديلات المعلمة المرتبطة بأنشطة البنية القديمة */
+export const CONTENT_VERSION = 2;
+
 export const CONTENT_DIR = process.env.CONTENT_DIR || path.resolve(process.cwd(), 'content');
 
 function readJson<T>(rel: string): T {
@@ -87,7 +90,11 @@ export function lessonForStudent(lesson: Lesson, revealed: Set<string>, showTeac
   const l = deepClone(lesson);
   for (const a of l.activities) {
     if (!showTeacherProcedures) delete a.teacherProcedures;
-    for (const s of a.worksheet.sections) for (const f of s.fields) delete f.answerKey;
+    for (const s of a.worksheet.sections) if (s.assist) s.assist = { label: s.assist.label, message: '' };
+    for (const s of a.worksheet.sections) for (const f of s.fields) {
+      if (f.answerKey != null) f.checkable = true;
+      delete f.answerKey; delete f.optionFeedback;
+    }
     a.materials = a.materials.map((m) => {
       if (m.type === 'criteria' && m.fromRubric && l.rubric) {
         return { ...m, items: l.rubric.criteria.map((c, i) => ({ label: String(i + 1), text: c.text })) };
@@ -139,23 +146,29 @@ export function validateContent(): { errors: string[]; warnings: string[] } {
   for (const l of c.lessons) {
     for (const s of [...l.skills, ...l.reinforcedSkills, ...(l.integratedSkills ?? [])]) if (!skillIds.has(s)) errors.push(`${l.id}: مهارة غير معتمدة ${s}`);
     if (l.status !== 'authored') { warnings.push(`${l.id}: مسودة (لم يُعدّ محتواها بعد).`); continue; }
-    const stages = l.activities.map((a) => a.stage);
+    const core = l.activities.filter((a) => !a.homework);
+    const firstHw = l.activities.findIndex((a) => a.homework);
+    if (firstHw >= 0 && l.activities.slice(firstHw).some((a) => !a.homework)) errors.push(`${l.id}: النشاط البيتي يجب أن يأتي بعد الخطوات السبع.`);
+    const stages = core.map((a) => a.stage);
     for (let s = 1; s <= 7; s++) if (!stages.includes(s as any)) errors.push(`${l.id}: الخطوة ${s} غير موجودة.`);
-    for (let i = 1; i < stages.length; i++) if (stages[i] < stages[i - 1]) errors.push(`${l.id}: ترتيب الخطوات مخالف عند النشاط ${l.activities[i].id}.`);
+    for (let i = 1; i < stages.length; i++) if (stages[i] < stages[i - 1]) errors.push(`${l.id}: ترتيب الخطوات مخالف عند النشاط ${core[i].id}.`);
     if (!l.rubric) warnings.push(`${l.id}: لا توجد معايير تقويم للحصة.`);
     for (const a of l.activities) {
       if (seen.has(a.id)) errors.push(`معرف نشاط مكرر ${a.id}`);
       seen.add(a.id);
-      for (const k of ['title', 'goal', 'expectedOutput'] as const) if (!a[k]) errors.push(`${a.id}: الحقل ${k} فارغ.`);
+      if (!a.title) errors.push(`${a.id}: العنوان فارغ.`);
+      if (!a.homework && !a.studentProcedures?.length) errors.push(`${a.id}: إجراءات الطالبة فارغة.`);
       if (!a.assistant?.name || !a.assistant.opening) errors.push(`${a.id}: تعليمات المساعد ناقصة.`);
       for (const s of a.skills) if (!l.skills.includes(s) && !l.reinforcedSkills.includes(s) && !(l.integratedSkills ?? []).includes(s)) errors.push(`${a.id}: المهارة ${s} ليست من مهارات الحصة.`);
       for (const m of a.motivation) if (!indicatorIds.has(m)) errors.push(`${a.id}: مؤشر دافعية غير معتمد ${m}.`);
       const fids = new Set(activityFields(a).map((f) => f.id));
+      if (fids.size !== activityFields(a).length) errors.push(`${a.id}: معرف حقل مكرر.`);
+      for (const f of activityFields(a)) if (f.answerKey != null && !['choice', 'select', 'multi', 'classify', 'ordering', 'table'].includes(f.type)) errors.push(`${a.id}/${f.id}: مفتاح إجابة لنوع لا يُفحص.`);
       for (const r of a.requirements.fields) if (!fids.has(r)) errors.push(`${a.id}: متطلب لحقل غير موجود ${r}.`);
-      if (a.stage === 6 && (!a.independent || a.assistant.mode !== 'disabled')) errors.push(`${a.id}: خطوة الإنتاج المستقل يجب أن تعطّل المساعد التوليدي.`);
-      if (a.stage === 7 && !a.evaluation) errors.push(`${a.id}: خطوة التقويم يجب أن تحدد المنتج المستقل المصدر.`);
+      if (!a.homework && a.stage === 6 && (!a.independent || a.assistant.mode !== 'disabled')) errors.push(`${a.id}: خطوة الإنتاج المستقل يجب أن تعطّل المساعد التوليدي.`);
+      if (!a.homework && a.stage === 7 && !a.evaluation) errors.push(`${a.id}: خطوة التقويم يجب أن تحدد المنتج المستقل المصدر.`);
       for (const p of a.showProducts ?? []) if (!c.lessons.some((x) => x.id === p && x.number < l.number) && p !== l.id) errors.push(`${a.id}: منتج غير معروف أو لاحق ${p}.`);
-      for (const f of activityFields(a)) for (const p of f.prefill ?? []) if (!c.lessons.some((x) => x.id === p.lesson && x.number < l.number)) errors.push(`${a.id}/${f.id}: استرجاع من حصة غير سابقة ${p.lesson}.`);
+      for (const f of activityFields(a)) for (const p of f.prefill ?? []) if (!(a.homework && p.lesson === l.id) && !c.lessons.some((x) => x.id === p.lesson && x.number < l.number)) errors.push(`${a.id}/${f.id}: استرجاع من حصة غير سابقة ${p.lesson}.`);
     }
   }
   return { errors, warnings };

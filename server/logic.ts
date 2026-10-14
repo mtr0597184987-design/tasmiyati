@@ -3,7 +3,7 @@ import type { Activity, ActivityStatus, AppSettings, Field, Lesson } from '../sh
 import { all, get, getSetting, parse, run, tx } from './db.ts';
 import { activityFields, allLessons, getLesson } from './content.ts';
 import { HttpError } from './http.ts';
-import { outlineStats, wordCount, paragraphCount } from '../shared/outline.ts';
+import { outlineStats, parsePlanner, parseTable, plannerStats, wordCount, paragraphCount } from '../shared/outline.ts';
 
 export const DEFAULT_SETTINGS: AppSettings = {
   freeNavigation: false,
@@ -38,22 +38,41 @@ export function isFilled(f: Field | undefined, v: any): boolean {
       if (f.minParagraphs && paragraphCount(String(v)) < f.minParagraphs) return false;
       return true;
     case 'list': return Array.isArray(v) && v.filter((x) => String(x ?? '').trim()).length >= (f.min ?? 1);
+    case 'planner': { const p = plannerStats(v); return !!p.mode && p.topic && p.ideas >= (f.min ?? 1) && p.minDetails >= (f.minDetails ?? 0); }
+    case 'multi': return Array.isArray(v) && v.length >= (f.min ?? 1);
     case 'classify': return (f.items ?? []).every((it) => v?.[it.id]);
-    case 'table': return (f.rows ?? []).every((r) => (f.columns ?? []).every((c) => String(v?.[r.id]?.[c.id] ?? '').trim()));
+    case 'table': { const t = parseTable(v); return (f.rows ?? []).filter((r) => !f.optionalRows?.includes(r.id)).every((r) => (f.columns ?? []).every((c) => String(t?.[r.id]?.[c.id] ?? '').trim())); }
     case 'ordering': return Array.isArray(v) && v.length === (f.items?.length ?? 0);
     default: return String(v).trim().length > 0;
   }
 }
 
 /** فحص موضوعي فقط للحقول ذات الإجابة الواحدة (الترتيب والاختيار)، أما الإجابات المفتوحة فتُقيَّم بالمعايير */
-export function checkField(f: Field, v: any): { correct: boolean; detail?: boolean[] } | null {
+export function checkField(f: Field, v: any): { correct: boolean; detail?: boolean[]; message?: string } | null {
   if (f.answerKey == null || v == null) return null;
   if (f.type === 'ordering' && Array.isArray(v)) {
     const key = f.answerKey as string[];
     const detail = key.map((k, i) => v[i] === k);
     return { correct: detail.every(Boolean), detail };
   }
-  if (f.type === 'choice') return { correct: v === f.answerKey };
+  if (f.type === 'choice' || f.type === 'select') {
+    const correct = v === f.answerKey;
+    const message = f.optionFeedback?.[v] ?? (correct ? f.feedback?.ok : f.feedback?.no);
+    return message ? { correct, message } : { correct };
+  }
+  if (f.type === 'multi' && Array.isArray(v)) {
+    const key = new Set(f.answerKey as string[]);
+    return { correct: v.length === key.size && v.every((x) => key.has(x)) };
+  }
+  if (f.type === 'table' && v && typeof v === 'object') {
+    // مفتاح لخلايا الاختيار فقط: { rowId: { colId: value } }
+    const key = f.answerKey as Record<string, Record<string, string>>;
+    const cells: [string, string][] = [];
+    for (const r of Object.keys(key)) for (const c of Object.keys(key[r])) cells.push([r, c]);
+    if (!cells.every(([r, c]) => v?.[r]?.[c])) return null;
+    const detail = cells.map(([r, c]) => v[r][c] === key[r][c]);
+    return { correct: detail.every(Boolean), detail };
+  }
   if (f.type === 'classify' && v && typeof v === 'object') {
     const key = f.answerKey as Record<string, string>;
     const items = (f.items ?? []).map((it) => it.id);
@@ -75,6 +94,7 @@ function sanitizeValue(f: Field, v: any): any {
       return out;
     }
     case 'table': {
+      if (typeof v === 'string') v = parseTable(v);
       const out: Record<string, Record<string, string>> = {};
       for (const r of f.rows ?? []) { out[r.id] = {}; for (const c of f.columns ?? []) out[r.id][c.id] = str(v?.[r.id]?.[c.id], 600); }
       return out;
@@ -84,7 +104,13 @@ function sanitizeValue(f: Field, v: any): any {
       const arr = Array.isArray(v) ? v.filter((x) => ids.has(x)) : [];
       return arr.length === ids.size && new Set(arr).size === ids.size ? arr : (f.items ?? []).map((i) => i.id);
     }
-    case 'choice': return (f.options ?? []).some((o) => (typeof o === 'string' ? o : o.id) === v) ? v : null;
+    case 'choice': case 'select': return (f.options ?? []).some((o) => (typeof o === 'string' ? o : o.id) === v) ? v : null;
+    case 'multi': {
+      const ids = new Set((f.options ?? []).map((o) => (typeof o === 'string' ? o : o.id)));
+      const arr = Array.isArray(v) ? [...new Set(v.filter((x) => ids.has(x)))] : [];
+      return f.max ? arr.slice(0, f.max) : arr;
+    }
+    case 'planner': return JSON.stringify(parsePlanner(v));
     case 'chips': return str(v, 200);
     case 'outline': return str(v, 8000);
     default: return str(v, f.maxLength ?? 4000);
@@ -92,7 +118,7 @@ function sanitizeValue(f: Field, v: any): any {
 }
 
 export function saveValues(studentId: number, a: Activity, values: Record<string, any>) {
-  if (a.independent && getArtifact(studentId, lessonOf(a.id), 'initial')) throw new HttpError(409, 'سُلِّمت النسخة الأولية واعتُمدت، فلا يمكن تعديلها. يمكنكِ تحسينها في خطوة التقويم والتحسين.');
+  if (a.independent && getArtifact(studentId, lessonOf(a.id), 'initial')) throw new HttpError(409, 'سُلِّمت النسخة الأصلية واعتُمدت، فلا يمكن تعديلها. يمكنكِ تحسينها في مرحلة التقويم والتحسين الذكي.');
   const fields = new Map(activityFields(a).map((f) => [f.id, f]));
   const checks: Record<string, any> = {};
   tx(() => {
@@ -182,7 +208,7 @@ export function missingRequirements(studentId: number, lesson: Lesson, a: Activi
     if (a.independent) continue; // تُتحقق عند التسليم
     if (!isFilled(f, values[id])) missing.push(f?.label ?? id);
   }
-  if (a.requirements.submitted && !getArtifact(studentId, lesson.id, 'initial')) missing.push('تسليم النسخة الأولية من المنتج المستقل');
+  if (a.requirements.submitted && !getArtifact(studentId, lesson.id, 'initial')) missing.push('تسليم النسخة الأصلية من المنتج المستقل');
   if (a.requirements.selfAssessment && !selfAssessmentComplete(studentId, lesson, a)) missing.push('إكمال التقويم الذاتي لكل المعايير');
   if (a.requirements.revised && !getArtifact(studentId, lesson.id, 'revised')) missing.push('حفظ النسخة المحسنة');
   return missing;
@@ -208,14 +234,14 @@ export function completeActivity(studentId: number, lesson: Lesson, a: Activity)
 }
 
 export function submitIndependent(studentId: number, lesson: Lesson, a: Activity, values: Record<string, any>, meta: any) {
-  if (getArtifact(studentId, lesson.id, 'initial')) throw new HttpError(409, 'سُلِّمت النسخة الأولية من قبل.');
+  if (getArtifact(studentId, lesson.id, 'initial')) throw new HttpError(409, 'سُلِّمت النسخة الأصلية من قبل.');
   saveValues(studentId, a, values);
   const v = getValues(studentId, a.id);
   const fields = activityFields(a);
   const missing = a.requirements.fields.filter((id) => !isFilled(fields.find((f) => f.id === id), v[id])).map((id) => fields.find((f) => f.id === id)?.label ?? id);
   if (missing.length) throw new HttpError(400, 'أكملي جميع عناصر البطاقة قبل التسليم.', { missing });
   const data: Record<string, string> = {};
-  for (const f of fields) data[f.id] = String(v[f.id] ?? '');
+  for (const f of fields) data[f.id] = v[f.id] != null && typeof v[f.id] === 'object' ? JSON.stringify(v[f.id]) : String(v[f.id] ?? '');
   const opened = get('SELECT opened_at FROM progress WHERE student_id = ? AND activity_id = ?', studentId, a.id);
   const m = {
     submittedAt: new Date().toISOString(),
@@ -232,7 +258,10 @@ export function saveRevised(studentId: number, lesson: Lesson, a: Activity, valu
   if (!getArtifact(studentId, lesson.id, 'initial')) throw new HttpError(400, 'لا توجد نسخة أولية بعد.');
   if (!selfAssessmentComplete(studentId, lesson, a)) throw new HttpError(400, 'ابدئي بالتقويم الذاتي لكل المعايير قبل التعديل.');
   const data: Record<string, string> = {};
-  for (const f of lesson.productFields ?? []) data[f.id] = String(values?.[f.id] ?? '').slice(0, f.maxLength ?? 8000);
+  for (const f of lesson.productFields ?? []) {
+    const x = values?.[f.id];
+    data[f.id] = (x != null && typeof x === 'object' ? JSON.stringify(sanitizeValue(f, x)) : f.type === 'planner' ? sanitizeValue(f, x) : String(x ?? '')).slice(0, f.maxLength ?? 15000);
+  }
   run(`INSERT INTO artifacts(student_id, lesson_id, version, data) VALUES(?,?,'revised',?)
        ON CONFLICT(student_id, lesson_id, version) DO UPDATE SET data = excluded.data, meta = '{}', updated_at = datetime('now')`,
     studentId, lesson.id, JSON.stringify(data));
@@ -246,7 +275,7 @@ export function latestProducts(studentId: number) {
     const a = rev ?? ini;
     return {
       lessonId: l.id, number: l.number, title: l.title,
-      fields: (l.productFields ?? []).map((f) => ({ id: f.id, label: f.label, type: f.type })),
+      fields: (l.productFields ?? []).map((f) => ({ id: f.id, label: f.label, type: f.type, rows: f.rows, columns: f.columns, rowHeader: f.rowHeader })),
       data: a?.data ?? null, version: rev ? 'revised' : ini ? 'initial' : null,
       updatedAt: rev?.updated_at ?? ini?.meta?.submittedAt ?? null,
       approvedAt: (rev ?? ini)?.meta?.approvedAt ?? null,

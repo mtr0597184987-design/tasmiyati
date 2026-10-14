@@ -1,3 +1,4 @@
+import { productText } from '../shared/outline.ts';
 // واجهات برمجة الطالبة (وما تشترك فيه مع المعلمة).
 import { route, HttpError } from './http.ts';
 import { all, get, parse, run } from './db.ts';
@@ -7,7 +8,7 @@ import {
   activityStatuses, appSettings, assertAccessible, completeActivity, getArtifact, getLessonOr404, getValues, independentInProgress,
   latestProducts, lessonEnabled, markOpened, missingRequirements, revealedSet, saveRevised, saveValues, selfAssessment, selfAssessmentComplete, submitIndependent,
 } from './logic.ts';
-import { AIError, aiLive, buildSystemPrompt, callModel, demoReply, feedbackPrompt, getAIConfig, parseFeedback, type ChatTurn } from './ai.ts';
+import { AIError, aiLive, buildSystemPrompt, callModel, demoReply, feedbackPrompt, formatValue, getAIConfig, parseFeedback, type ChatTurn } from './ai.ts';
 import { portfolioData, portfolioHtml } from './portfolio.ts';
 
 function ip(c: { req: any }) { return String(c.req.headers['x-forwarded-for'] ?? c.req.socket.remoteAddress ?? ''); }
@@ -52,7 +53,7 @@ route('GET', '/api/catalog', 'any', (c) => {
       const st = activityStatuses(c.user!.id, l);
       progress.done = Object.values(st).filter((s) => s === 'completed').length;
       const cur = l.activities.find((a) => st[a.id] !== 'completed' && st[a.id] !== 'locked');
-      if (cur) progress.current = { id: cur.id, title: cur.title, stage: cur.stage };
+      if (cur) progress.current = { id: cur.id, title: cur.title, stage: cur.stage, homework: !!cur.homework };
     }
     return {
       id: l.id, number: l.number, title: l.title, status: l.status, enabled, courseLesson: l.courseLesson,
@@ -197,7 +198,10 @@ route('POST', '/api/activities/:id/chat', 'student', async (c) => {
 
   const values = getValues(sid, a.id);
   delete values.__self;
-  const system = buildSystemPrompt(lesson, a, values, productsContext(sid, a.showProducts));
+  // زر مسمى في نشاط (مثل «فحص اختياراتي»): تعليمته تُضاف إلى سياق المساعد ولا تظهر للطالبة
+  const sec = c.body?.assist ? a.worksheet.sections.find((x) => (x.id ?? x.title) === String(c.body.assist) && x.assist) : null;
+  const assistCtx = sec ? `\n## طلب الطالبة الآن\nضغطت الطالبة زر «${sec.assist!.label}» في نشاط «${sec.title}». ${sec.assist!.message}\n` : '';
+  const system = buildSystemPrompt(lesson, a, values, productsContext(sid, a.showProducts) + assistCtx);
   const turns: ChatTurn[] = [{ role: 'assistant', content: a.assistant.opening }];
   for (const h of history) turns.push({ role: h.role === 'student' ? 'user' : 'assistant', content: h.content });
   turns.push({ role: 'user', content: message });
@@ -219,7 +223,7 @@ function productsContext(sid: number, ids?: string[]): string {
   if (!ids?.length) return '';
   const all = latestProducts(sid).filter((p) => ids.includes(p.lessonId));
   const parts = all.map((p) => p.data
-    ? `منتج الحصة ${p.number} (${p.title}):\n` + p.fields.map((f) => `- ${f.label}: ${String(p.data![f.id] ?? '').slice(0, 1500)}`).join('\n')
+    ? `منتج الحصة ${p.number} (${p.title}):\n` + p.fields.map((f) => `- ${f.label}: ${productText(f, p.data![f.id]).slice(0, 1500)}`).join('\n')
     : `منتج الحصة ${p.number}: لم تسلّمه الطالبة بعد.`);
   return `## منتجات الطالبة في الحصص السابقة (للاسترشاد فقط؛ لا تعيدي كتابتها)\n${parts.join('\n\n')}\n`;
 }
@@ -291,13 +295,13 @@ route('POST', '/api/activities/:id/share', 'student', (c) => {
   if (a.peer.fields.includes('revised')) {
     const r = getArtifact(sid, lesson.id, 'revised');
     if (!r) throw new HttpError(400, 'احفظي النسخة المحسنة أولًا.');
-    for (const f of lesson.productFields ?? []) content[f.label] = r.data[f.id];
+    for (const f of lesson.productFields ?? []) content[f.label] = productText(f, r.data[f.id]);
   } else {
     const v = getValues(sid, a.id);
     const fields = activityFields(a);
     for (const id of a.peer.fields) {
       const f = fields.find((x) => x.id === id);
-      if (v[id]) content[f?.label ?? id] = String(v[id]);
+      if (v[id] != null && v[id] !== '') content[f?.label ?? id] = f ? formatValue(f, v[id]) : String(v[id]);
     }
   }
   if (!Object.keys(content).length) throw new HttpError(400, 'احفظي إجابتكِ أولًا ثم شاركيها.');

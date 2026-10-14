@@ -7,7 +7,8 @@ import { AiBadge, Alert, STAGE_COLORS, useApp } from '../ui';
 
 interface Msg { role: 'student' | 'assistant'; content: string; mode: string }
 
-export function AssistantPanel({ activity, history, blocked, aiMode, stageIcon, onSent }: {
+export function AssistantPanel({ activity, history, blocked, aiMode, stageIcon, onSent, inject }: {
+  inject?: { n: number; text: string; section?: string } | null;
   activity: Activity;
   history: Msg[];
   blocked: null | 'independent' | 'independent_lesson';
@@ -25,13 +26,20 @@ export function AssistantPanel({ activity, history, blocked, aiMode, stageIcon, 
   const color = STAGE_COLORS[activity.stage];
 
   useEffect(() => { box.current?.scrollTo({ top: box.current.scrollHeight, behavior: 'smooth' }); }, [msgs, busy]);
+  // أزرار المساعد في أنشطة المهمة (مثل «فحص اختياراتي») ترسل طلبها إلى المحادثة نفسها
+  const lastInject = useRef(0);
+  useEffect(() => {
+    if (!inject || inject.n === lastInject.current || blocked || aiMode === 'off') return;
+    lastInject.current = inject.n;
+    send(inject.text, inject.section);
+  }, [inject?.n]);
 
-  async function send(message: string) {
+  async function send(message: string, assist?: string) {
     if (!message.trim() || busy) return;
     setBusy(true); setError('');
     setMsgs((m) => [...m, { role: 'student', content: message, mode: 'pending' }]);
     try {
-      const r = await api<{ reply: string; mode: string }>(`/api/activities/${activity.id}/chat`, { body: { message } });
+      const r = await api<{ reply: string; mode: string }>(`/api/activities/${activity.id}/chat`, { body: { message, assist } });
       setMsgs((m) => [...m.slice(0, -1), { role: 'student', content: message, mode: r.mode }, { role: 'assistant', content: r.reply, mode: r.mode }]);
       setText('');
       onSent?.();
@@ -67,7 +75,7 @@ export function AssistantPanel({ activity, history, blocked, aiMode, stageIcon, 
           ) : (
             <>
               <p style={{ fontWeight: 600 }}>المساعد متوقف مؤقتًا</p>
-              <p className="small">بدأتِ الإنتاج الكتابي المستقل في هذه الحصة، لذلك تتوقف المساعدة التوليدية في جميع أنشطتها حتى تسلّمي نسختكِ الأولية.</p>
+              <p className="small">بدأتِ الإنتاج الكتابي المستقل في هذه الحصة، لذلك تتوقف المساعدة التوليدية في جميع مهماتها حتى تسلّمي إنتاجكِ المستقل.</p>
             </>
           )}
         </div>

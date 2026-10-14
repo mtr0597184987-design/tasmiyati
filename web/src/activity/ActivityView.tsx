@@ -1,6 +1,6 @@
 // محرك النشاط: الهدف ← المادة ← التفاعل مع المساعد ← الاستجابة ← التلميح ← الحفظ ← التحقق من المتطلبات ← الانتقال.
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { Activity, Lesson, Material } from '../../../shared/types';
+import type { Activity, Lesson, Material, WorksheetSection } from '../../../shared/types';
 import { api, readDraft, writeDraft } from '../api';
 import { Icon } from '../icons';
 import { Alert, ErrorBox, Loading, Modal, STAGE_COLORS, fmtDate, useApp } from '../ui';
@@ -44,6 +44,8 @@ export function ActivityView({ lesson, activity: a, catalog, status, preview, po
   const [confirmSubmit, setConfirmSubmit] = useState(false);
   const [busy, setBusy] = useState(false);
   const [products, setProducts] = useState<Product[] | null>(null);
+  const [shown, setShown] = useState<Set<string>>(new Set());
+  const [inject, setInject] = useState<{ n: number; text: string; section?: string } | null>(null);
   const hasPrefill = a.worksheet.sections.some((s) => s.fields.some((f) => f.prefill?.length));
   useEffect(() => {
     if (preview || (!a.showProducts?.length && !hasPrefill)) return;
@@ -61,6 +63,7 @@ export function ActivityView({ lesson, activity: a, catalog, status, preview, po
   const timer = useRef<number | undefined>(undefined);
   const latest = useRef(values);
   latest.current = values;
+  const savedVals = useRef<Record<string, any>>({});
 
   const load = useCallback(async () => {
     if (preview) { setData({ preview: true, values: {}, chat: [] }); return; }
@@ -71,6 +74,7 @@ export function ActivityView({ lesson, activity: a, catalog, status, preview, po
       const draft = readDraft(me.id, a.id);
       const merged = draft?.dirty ? { ...d.values, ...draft.values } : d.values;
       setData(d);
+      savedVals.current = d.values ?? {};
       setValues(merged);
       setHints(d.hints ?? {});
       try { paste.current = Number(localStorage.getItem(`ts-paste:${me.id}:${a.id}`)) || 0; } catch { /* */ }
@@ -90,6 +94,7 @@ export function ActivityView({ lesson, activity: a, catalog, status, preview, po
     try {
       const r = await api<any>(`/api/activities/${a.id}/responses`, { method: 'PUT', body: { values: v } });
       writeDraft(me.id, a.id, { values: v, dirty: latest.current !== v, at: Date.now() });
+      savedVals.current = v;
       setChecks((c) => ({ ...c, ...r.checks }));
       if (r.reveal?.length) setRevealed(r.reveal);
       setSaveState(latest.current === v ? 'saved' : 'dirty');
@@ -114,6 +119,7 @@ export function ActivityView({ lesson, activity: a, catalog, status, preview, po
     setSaveState('dirty');
     setMissing([]);
     if (checks[id]) setChecks((c) => { const n = { ...c }; delete n[id]; return n; });
+    setShown((sh) => { if (!sh.has(id)) return sh; const n = new Set(sh); n.delete(id); return n; });
     scheduleSave();
   }
   function onPaste() {
@@ -121,12 +127,24 @@ export function ActivityView({ lesson, activity: a, catalog, status, preview, po
     try { localStorage.setItem(`ts-paste:${me.id}:${a.id}`, String(paste.current)); } catch { /* */ }
   }
 
+  async function checkNow(fid: string) {
+    if (preview) { toast('يظهر الفحص للطالبة بعد الحفظ.', 'info'); return; }
+    if (!(await save())) return;
+    setShown((sh) => new Set(sh).add(fid));
+  }
+  async function assistNow(sec: WorksheetSection) {
+    if (!sec.assist) return;
+    await save();
+    setInject({ n: Date.now(), text: `«${sec.assist.label}»`, section: sec.id ?? sec.title });
+    setPane('assistant');
+  }
+
   async function complete() {
     setBusy(true);
     try {
       if (!(await save())) { toast('تعذّر حفظ إجاباتكِ على الخادم. هي محفوظة على هذا الجهاز؛ حاولي مرة أخرى عند عودة الاتصال.', 'error'); return; }
       await api(`/api/activities/${a.id}/complete`, { body: {} });
-      toast(`${STAGE_PRAISE[a.stage]} (أنجزتِ ${position.done + (status === 'completed' ? 0 : 1)} من ${position.total} أنشطة في هذه الحصة)`, 'ok');
+      toast(`${a.homework ? 'أنجزتِ النشاط البيتي، وحُفظ عملكِ.' : STAGE_PRAISE[a.stage]} (أنجزتِ ${position.done + (status === 'completed' ? 0 : 1)} من ${position.total} في هذه الحصة)`, 'ok');
       await onCompleted();
       if (nextId) onNavigate(nextId);
     } catch (e: any) {
@@ -141,7 +159,7 @@ export function ActivityView({ lesson, activity: a, catalog, status, preview, po
       await api(`/api/activities/${a.id}/submit`, { body: { values: latest.current, meta: { pasteCount: paste.current } } });
       writeDraft(me.id, a.id, { values: latest.current, dirty: false, at: Date.now() });
       setConfirmSubmit(false);
-      toast(STAGE_PRAISE[6] + ' حُفظت نسختكِ الأولية مع وقت التسليم.', 'ok');
+      toast(STAGE_PRAISE[6] + ' حُفظ إنتاجكِ المستقل مع وقت التسليم.', 'ok');
       await onCompleted();
       await load();
     } catch (e: any) {
@@ -160,27 +178,33 @@ export function ActivityView({ lesson, activity: a, catalog, status, preview, po
   const submitted = a.independent && data.initial;
   const previewHints = preview ? Object.fromEntries(a.worksheet.sections.filter((s) => s.hints).map((s) => [s.id ?? s.title, s.hints!])) : hints;
   const skills = a.skills.map((s) => catalog.skills.find((x) => x.id === s)!).filter(Boolean);
+  const ORD = ['', 'الأولى', 'الثانية', 'الثالثة', 'الرابعة', 'الخامسة', 'السادسة', 'السابعة'];
+  const assistOff = aiOff(data, aiMode, a);
+  const isRevealed = (fid: string) => { const x = savedVals.current[fid]; return x != null && (typeof x === 'string' ? x.trim().length > 0 : Object.keys(x).length > 0); };
+  const wsProps = { preview, isRevealed, activityId: a.id, values, onChange, checks, hints: previewHints, onCheck: checkNow, shownChecks: preview ? undefined : shown, onAssist: assistNow, assistOff };
+  const [evalIntro, ...evalRest] = a.worksheet.sections;
+  const submitLabel = a.submitLabel ?? 'تسليم المهمة';
 
   const work = (
     <div className="pane-work">
       <div className="card">
         <header className="activity-header" style={{ ['--c' as any]: color }}>
-          <div className="eyebrow">الخطوة {stage.id}: {stage.name} · النشاط ({a.id})</div>
+          <div className="eyebrow">{a.homework ? <>النشاط البيتي{lesson.homeworkTitle ? `: ${lesson.homeworkTitle}` : ''}</> : <>المرحلة {ORD[stage.id]}: {stage.name} · المهمة ({a.id}){a.minutes ? ` · ${a.minutes} ${a.minutes > 10 ? 'دقيقة' : 'دقائق'}` : ''}</>}</div>
           <h2>{a.title}</h2>
-          <div className="goal"><b>هدف النشاط: </b>{a.goal}</div>
+          {a.goal && <div className="goal"><b>هدف المهمة: </b>{a.goal}</div>}
           <div className="skill-pills">
             {skills.map((s) => <span key={s.id} className="skill-pill" title={preview ? s.text : undefined}>{s.studentLabel}</span>)}
-            <span className="skill-pill" style={{ background: 'var(--surface-2)' }}><b>المخرج: </b>{a.expectedOutput}</span>
+            {a.expectedOutput && <span className="skill-pill" style={{ background: 'var(--surface-2)' }}><b>المخرج: </b>{a.expectedOutput}</span>}
           </div>
         </header>
 
         <details className="box" style={{ marginBottom: 14 }}>
-          <summary><span><Icon name="list" size={16} /> ماذا سأفعل في هذا النشاط؟</span><Icon name="down" size={16} /></summary>
+          <summary><span><Icon name="list" size={16} /> {a.homework ? 'ماذا سأفعل في النشاط البيتي؟' : 'ماذا سأفعل في هذه المهمة؟'}</span><Icon name="down" size={16} /></summary>
           <div className="body">
-            <ol style={{ margin: 0 }}>{a.studentProcedures.map((p, i) => <li key={i}>{p}</li>)}</ol>
+            {a.studentProcedures.length > 0 && <><h4 style={{ marginTop: 0 }}>إجراءات التنفيذ المرتبطة بالطالبة</h4><ol style={{ margin: 0 }}>{a.studentProcedures.map((p, i) => <li key={i}>{p}</li>)}</ol></>}
             {a.teacherProcedures && (
               <>
-                <h4 style={{ marginTop: 12 }}>إجراءات المعلمة</h4>
+                <h4 style={{ marginTop: 12 }}>{a.homework ? 'متابعة المعلمة وتقويم النشاط البيتي' : 'إجراءات التنفيذ المرتبطة بالمعلمة'}</h4>
                 <ol style={{ margin: 0 }}>{a.teacherProcedures.map((p, i) => <li key={i}>{p}</li>)}</ol>
               </>
             )}
@@ -200,26 +224,27 @@ export function ActivityView({ lesson, activity: a, catalog, status, preview, po
         <div style={{ marginTop: 18 }}>
           {a.evaluation && !preview ? (
             <>
-              <Evaluation lesson={lesson} activityId={a.id} data={data.evaluation} onRefresh={load} />
-              <div className="card flat" style={{ marginTop: 14 }}>
-                <Worksheet activityId={a.id} sections={a.worksheet.sections} values={values} onChange={onChange} checks={checks} hints={hints} />
-              </div>
+              {evalIntro?.content?.length ? <Worksheet {...wsProps} sections={[evalIntro]} setHints={undefined} hideFields={!evalIntro.fields.length} /> : null}
+              <Evaluation lesson={lesson} activity={a} data={data.evaluation} onRefresh={load}
+                between={(evalIntro?.content?.length ? evalRest : a.worksheet.sections).length > 0 ? (
+                  <Worksheet {...wsProps} sections={evalIntro?.content?.length ? evalRest : a.worksheet.sections} setHints={(s, h) => setHints((x) => ({ ...x, [s]: h }))} />
+                ) : null} />
             </>
           ) : submitted ? (
             <div className="stack">
-              <Alert kind="ok">سلّمتِ نسختكِ الأولية في {fmtDate(data.initial.meta.submittedAt)}. اعتُمدت كما كتبتِها، ويمكنكِ تحسينها في الخطوة السابعة.</Alert>
+              <Alert kind="ok">سلّمتِ إنتاجكِ المستقل في {fmtDate(data.initial.meta.submittedAt)}. حُفظ كما كتبتِه نسخةً أصلية، ويمكنكِ تحسينه في مرحلة التقويم والتحسين الذكي.</Alert>
               <Worksheet activityId={a.id} sections={a.worksheet.sections} values={data.initial.data} onChange={() => {}} checks={{}} hints={{}} readOnly />
             </div>
           ) : (
             <>
               {a.independent && !preview && (
-                <Alert kind="info" icon="pen">هذه مساحة الإنتاج المستقل: اكتبي بنفسكِ. تُحفظ مسودتكِ تلقائيًا، ولا تُعتمد نسختكِ الأولية إلا عند الضغط على «تسليم النسخة الأولية».</Alert>
+                <Alert kind="info" icon="pen">هذه مساحة الإنتاج المستقل: اكتبي بنفسكِ، فالمساعد الذكي وأدوات توليد النصوص معطلة. تُحفظ مسودتكِ تلقائيًا، ولا يُعتمد إنتاجكِ إلا عند الضغط على «{submitLabel}».</Alert>
               )}
               <div className="row between" style={{ marginTop: 14 }}>
-                <h3 style={{ margin: 0 }}><Icon name="edit" size={18} style={{ verticalAlign: -3 }} /> {a.independent ? 'منتجي' : 'ورقة العمل'}</h3>
+                <h3 style={{ margin: 0 }}><Icon name="edit" size={18} style={{ verticalAlign: -3 }} /> {a.independent ? 'إنتاجي المستقل' : a.homework ? 'النشاط البيتي' : 'أنشطة المهمة'}</h3>
                 {hasPrefill && !preview && <button className="btn sm" onClick={applyPrefill} disabled={!products}><Icon name="folder" size={16} /> استرجاع من منتجاتي السابقة</button>}
               </div>
-              <Worksheet activityId={a.id} sections={a.worksheet.sections} values={values} onChange={onChange} checks={checks} hints={previewHints}
+              <Worksheet {...wsProps} sections={a.worksheet.sections}
                 setHints={preview ? undefined : (s, h) => setHints((x) => ({ ...x, [s]: h }))} readOnly={preview} onPaste={a.independent ? onPaste : undefined} />
             </>
           )}
@@ -240,11 +265,11 @@ export function ActivityView({ lesson, activity: a, catalog, status, preview, po
             <div className="row">
               {!submitted && !a.evaluation && <button className="btn" onClick={save} disabled={saveState === 'saving'}>حفظ</button>}
               {a.independent && !submitted ? (
-                <button className="btn accent" onClick={() => setConfirmSubmit(true)} disabled={busy}><Icon name="check" size={18} /> تسليم النسخة الأولية</button>
+                <button className="btn accent" onClick={() => setConfirmSubmit(true)} disabled={busy}><Icon name="check" size={18} /> {submitLabel}</button>
               ) : status === 'completed' ? (
                 nextId ? <button className="btn primary" onClick={() => { save(); onNavigate(nextId); }}>التالي <Icon name="arrowL" size={18} /></button> : <span className="badge ok">اكتملت الحصة</span>
               ) : (
-                <button className="btn primary" onClick={complete} disabled={busy}>{busy ? 'جارٍ التحقق...' : nextId ? 'إكمال النشاط والانتقال' : 'إكمال النشاط'} <Icon name="arrowL" size={18} /></button>
+                <button className="btn primary" onClick={complete} disabled={busy}>{busy ? 'جارٍ التحقق...' : a.completeLabel ?? (nextId ? 'إكمال المهمة والانتقال' : 'إكمال المهمة')} <Icon name="arrowL" size={18} /></button>
               )}
             </div>
           </div>
@@ -257,7 +282,7 @@ export function ActivityView({ lesson, activity: a, catalog, status, preview, po
   const assistant = (
     <div className="pane-assistant side-sticky">
       {preview ? <AssistantConfigPreview a={a} /> : (
-        <AssistantPanel activity={a} history={data.chat ?? []} blocked={data.chatBlocked} aiMode={data.ai?.mode ?? aiMode} stageIcon={stage.icon} />
+        <AssistantPanel activity={a} history={data.chat ?? []} blocked={data.chatBlocked} aiMode={data.ai?.mode ?? aiMode} stageIcon={stage.icon} inject={inject} />
       )}
     </div>
   );
@@ -273,14 +298,21 @@ export function ActivityView({ lesson, activity: a, catalog, status, preview, po
         {assistant}
       </div>
       {confirmSubmit && (
-        <Modal title="تسليم النسخة الأولية" onClose={() => setConfirmSubmit(false)}
-          footer={<><button className="btn" onClick={() => setConfirmSubmit(false)}>أراجع مرة أخرى</button><button className="btn accent" onClick={submitIndependent} disabled={busy}>نعم، أسلّمها</button></>}>
-          <p>بعد التسليم تُعتمد هذه البطاقة نسخةً أولية كما كتبتِها، ولا يمكن تعديلها. ستحسّنينها بنفسكِ في خطوة التقويم والتحسين.</p>
-          <p className="small muted">راجعي الاتساق: هل يتصل الموضوع بالهدف؟ وهل يناسبان الفئة التي اخترتِها؟</p>
+        <Modal title={submitLabel} onClose={() => setConfirmSubmit(false)}
+          footer={<><button className="btn" onClick={() => setConfirmSubmit(false)}>أراجع مرة أخرى</button><button className="btn accent" onClick={submitIndependent} disabled={busy}>نعم، أسلّم</button></>}>
+          <p>بعد التسليم يُحفظ إنتاجكِ نسخةً أصلية كما كتبتِه، ولا يمكن تعديله هنا. ستحسّنينه بنفسكِ في مرحلة التقويم والتحسين الذكي مع الاحتفاظ بالنسخة الأصلية.</p>
+          <p className="small muted">راجعي عملكِ مرة أخيرة قبل التسليم.</p>
         </Modal>
       )}
     </>
   );
+}
+
+function aiOff(data: any, aiMode: string, a: Activity): string | undefined {
+  if (a.assistant.mode === 'disabled') return 'المساعد معطل في الإنتاج المستقل.';
+  if (data?.chatBlocked) return 'المساعد متوقف حتى تسلّمي إنتاجكِ المستقل في هذه الحصة.';
+  if ((data?.ai?.mode ?? aiMode) === 'off') return 'المساعد معطل من إعدادات المعلمة.';
+  return undefined;
 }
 
 function SaveIndicator({ state }: { state: SaveState }) {

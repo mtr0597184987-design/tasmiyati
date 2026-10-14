@@ -60,7 +60,7 @@ export function StudentDetail({ id }: { id: string }) {
       {d.lessons.map((l: any) => {
         const started = l.activities.some((a: any) => a.status === 'completed' || a.status === 'in_progress');
         if (!started && l.number > 1) return null;
-        const evalAct = l.activities.find((a: any) => a.stage === 7);
+        const evalAct = l.activities.find((a: any) => a.stage === 7 && !a.homework);
         return (
           <section key={l.id} className="card">
             <h3>الحصة {l.number}: {l.title}</h3>
@@ -68,9 +68,9 @@ export function StudentDetail({ id }: { id: string }) {
             {l.initial ? (
               <div className="card soft" style={{ marginBottom: 12 }}>
                 <div className="row between">
-                  <b>المنتج المستقل: النسخة الأولية والمحسنة {(l.revised ?? l.initial).meta?.approvedAt && <span className="badge ok">معتمد</span>}</b>
+                  <b>المنتج المستقل: النسخة الأصلية والمحسنة {(l.revised ?? l.initial).meta?.approvedAt && <span className="badge ok">معتمد</span>}</b>
                   <button className="btn sm primary" onClick={() => act(() => api(`/api/teacher/students/${s.id}/approve`, { body: { lessonId: l.id, approve: !(l.revised ?? l.initial).meta?.approvedAt } }), (l.revised ?? l.initial).meta?.approvedAt ? 'أُلغي الاعتماد.' : 'اعتُمد المنتج.')}>
-                    {(l.revised ?? l.initial).meta?.approvedAt ? 'إلغاء الاعتماد' : `اعتماد ${l.revised ? 'النسخة المحسنة' : 'النسخة الأولية'}`}
+                    {(l.revised ?? l.initial).meta?.approvedAt ? 'إلغاء الاعتماد' : `اعتماد ${l.revised ? 'النسخة المحسنة' : 'النسخة الأصلية'}`}
                   </button>
                   <button className="btn sm" onClick={() => setReopen(l.id)}>إعادة فتح التسليم</button>
                 </div>
@@ -91,7 +91,7 @@ export function StudentDetail({ id }: { id: string }) {
             {l.activities.map((a: any) => (
               <details key={a.id} className="box">
                 <summary>
-                  <span>({a.id}) {a.title}</span>
+                  <span>{a.homework ? 'النشاط البيتي: ' : `(${a.id}) `}{a.title}</span>
                   <span className="row" style={{ gap: 6 }}>
                     {a.unlockedByTeacher && <span className="badge info">فتحته المعلمة</span>}
                     <span className={`badge ${ST[a.status][1]}`}>{ST[a.status][0]}</span>
@@ -106,7 +106,7 @@ export function StudentDetail({ id }: { id: string }) {
                   <NoteForm onSave={(note, visible) => act(() => api('/api/teacher/notes', { body: { studentId: s.id, activityId: a.id, note, visibleToStudent: visible } }), 'حُفظت الملاحظة.')} />
                   <div className="row">
                     {a.status === 'locked' && <button className="btn sm" onClick={() => act(() => api(`/api/teacher/students/${s.id}/unlock`, { body: { activityId: a.id } }), 'فُتح النشاط للطالبة.')}><Icon name="lock" size={15} /> فتح النشاط لها (تجاوز المتطلبات)</button>}
-                    {a.chatCount > 0 && <button className="btn sm" onClick={() => api<any>(`/api/teacher/students/${s.id}/chat/${a.id}`).then((r) => setChat({ title: `سجل المساعد — (${a.id}) ${a.title}`, messages: r.messages }))}><Icon name="chat" size={15} /> سجل المساعد ({a.chatCount})</button>}
+                    {a.chatCount > 0 && <button className="btn sm" onClick={() => api<any>(`/api/teacher/students/${s.id}/chat/${a.id}`).then((r) => setChat({ title: `سجل المساعد — ${a.homework ? 'النشاط البيتي' : `(${a.id})`} ${a.title}`, messages: r.messages }))}><Icon name="chat" size={15} /> سجل المساعد ({a.chatCount})</button>}
                   </div>
                 </div>
               </details>

@@ -318,7 +318,8 @@ a.lesson-card:hover { border-color: var(--primary); }
 .skill-pills { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .skill-pill { background: var(--surface); border: 1px solid var(--line); border-radius: 99px; padding: 2px 12px; font-size: .86rem; color: var(--ink-2); }
 
-.stagebar { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; margin: 6px 0 18px; }
+.stagebar { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); grid-auto-flow: column; gap: 6px; margin: 6px 0 18px; }
+.stage.homework { border-style: dashed; }
 .stage {
   border: 1px solid var(--line); background: var(--surface); border-radius: 12px; padding: 8px 6px 9px; cursor: pointer; text-align: center;
   display: flex; flex-direction: column; align-items: center; gap: 3px; position: relative; min-height: 84px;
@@ -606,3 +607,41 @@ details.box + details.box { margin-top: 8px; }
 .journey li.done { border-inline-start: 4px solid var(--ok); }
 .journey summary { cursor: pointer; list-style: none; }
 .journey summary::-webkit-details-marker { display: none; }
+
+/* ---- أنشطة المهمة وفق الدليل ---- */
+.act-num { display: inline-block; font-size: .78rem; font-weight: 700; color: var(--primary-2); background: var(--surface-2); border: 1px solid var(--line); border-radius: 999px; padding: 1px 9px; margin-inline-end: 8px; vertical-align: 2px; }
+.act-text { font-family: var(--font-write); line-height: 1.95; margin: 8px 0; }
+table.grid.display th[scope="row"] { font-weight: 600; background: var(--surface-2); }
+table.grid.match td:first-child { font-family: var(--font-write); }
+table.grid.match tr.right td { background: var(--ok-soft); }
+table.grid.match tr.wrong td { background: var(--accent-soft); }
+.assist-btn { border-color: var(--primary); color: var(--primary-2); }
+.diagram-box { margin: 10px 0; padding: 10px; border: 1px dashed var(--line); border-radius: 12px; background: var(--surface); }
+.lesson-about .body h4 { margin: 10px 0 4px; }
+
+/* أداة المخطط */
+.planner { gap: 12px; }
+.planner-step { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+.planner-ideas { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px; }
+.planner-idea { border: 1px solid var(--line); border-radius: 12px; padding: 8px; background: var(--surface); }
+.planner-idea .pos { width: 26px; height: 26px; border-radius: 50%; background: var(--surface-2); border: 1px solid var(--line); display: grid; place-items: center; font-size: .82rem; font-weight: 700; flex: none; }
+.ptree { display: flex; flex-direction: column; align-items: center; gap: 0; }
+.ptree-root { background: var(--primary); color: #fff; font-weight: 700; padding: 8px 16px; border-radius: 999px; text-align: center; max-width: 100%; }
+.ptree-branches { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; padding-top: 18px; position: relative; width: 100%; }
+.ptree-branches::before { content: ''; position: absolute; top: 0; inset-inline: 50%; height: 18px; border-inline-start: 2px solid var(--primary); }
+.ptree-branch { flex: 1 1 160px; max-width: 260px; border: 2px solid var(--primary); border-radius: 14px; padding: 8px 10px; background: var(--surface); position: relative; }
+.ptree-idea { font-weight: 700; font-family: var(--font-write); }
+.ptree-leaves { margin: 6px 0 0; padding-inline-start: 18px; font-size: .9rem; font-family: var(--font-write); }
+.pfish { display: flex; align-items: center; gap: 0; min-width: calc(var(--cols) * 170px + 120px); }
+.pfish-body { flex: 1; display: flex; flex-direction: column; }
+.pfish-row { display: grid; grid-template-columns: repeat(var(--cols), minmax(150px, 1fr)); gap: 10px; }
+.pfish-spine { height: 4px; background: var(--primary); border-radius: 2px; margin: 0; }
+.pfish-head { flex: none; width: 120px; min-height: 70px; display: grid; place-items: center; text-align: center; padding: 8px; font-weight: 700; color: #fff; background: var(--primary); border-radius: 50% 12px 12px 50% / 50% 12px 12px 50%; }
+.pfish-bone { position: relative; border: 1px solid var(--line); border-radius: 10px; padding: 6px 8px; background: var(--surface); font-family: var(--font-write); font-size: .9rem; }
+.pfish-bone.top { margin-bottom: 22px; }
+.pfish-bone.bottom { margin-top: 22px; }
+.pfish-bone.top::after, .pfish-bone.bottom::after { content: ''; position: absolute; inset-inline-start: 50%; width: 2px; height: 26px; background: var(--primary); transform-origin: center; }
+.pfish-bone.top::after { top: 100%; transform: skewX(-25deg); }
+.pfish-bone.bottom::after { bottom: 100%; transform: skewX(25deg); }
+.pfish-idea { font-weight: 700; }
+.pfish-bone ul { margin: 4px 0 0; padding-inline-start: 16px; }

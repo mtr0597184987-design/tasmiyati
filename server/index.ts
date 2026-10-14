@@ -2,9 +2,9 @@
 import path from 'node:path';
 import { createServer } from './http.ts';
 import { ensureTeacher } from './auth.ts';
-import { validateContent } from './content.ts';
+import { CONTENT_VERSION, validateContent } from './content.ts';
 import { getAIConfig } from './ai.ts';
-import { DB_PATH, initDb } from './db.ts';
+import { DB_PATH, getSetting, initDb, run, setSetting } from './db.ts';
 import { flushReplica, replicaEnabled } from './replica.ts';
 import './routes-student.ts';
 import './routes-teacher.ts';
@@ -26,6 +26,14 @@ if (errors.length) {
   process.exit(1);
 }
 if (warnings.length) console.log('تنبيهات المحتوى: ' + warnings.length + ' (حصص مسودة لم يُعدّ محتواها بعد)');
+
+// ترقية بنية المحتوى: تعديلات تعليمات المساعد والمعايير والسلالم الخاصة كانت مرتبطة بأنشطة البنية القديمة
+if (getSetting<number>('contentVersion', 1) !== CONTENT_VERSION) {
+  run("DELETE FROM overrides WHERE target LIKE 'activity:%' OR target LIKE 'rubric:%'");
+  run("DELETE FROM settings WHERE key LIKE 'scale:%'");
+  setSetting('contentVersion', CONTENT_VERSION);
+  console.log(`حُدّثت بنية المحتوى إلى الإصدار ${CONTENT_VERSION}، ومُسحت تعديلات الأنشطة القديمة.`);
+}
 
 const pw = ensureTeacher();
 if (pw) console.log(`\n=== أُنشئ حساب المعلمة. كلمة المرور: ${pw} — غيّريها من لوحة المعلمة ← الإعدادات ===\n`);

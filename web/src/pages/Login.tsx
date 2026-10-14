@@ -55,7 +55,7 @@ export function Login({ onDone }: { onDone: () => void; toast: (m: string, k?: a
           <div className="card soft" style={{ marginTop: 14 }}>
             <div className="card-title">بيانات الدخول في المعاينة</div>
             <p className="small" style={{ margin: 0 }}>
-              <b>طالبة:</b> اختاري «دخول الطالبة» واكتبي <span className="ltr">DEMO-1</span> أو <span className="ltr">DEMO-2</span> (التنقل بين الأنشطة بالتسلسل)، أو <span className="ltr">DEMO-3</span> (تنقل حر لاستعراض أي نشاط).<br />
+              <b>طالبة:</b> اختاري «دخول الطالبة» واكتبي <span className="ltr">DEMO-1</span> أو <span className="ltr">DEMO-2</span> (التنقل بين المهمات بالتسلسل)، أو <span className="ltr">DEMO-3</span> (تنقل حر لاستعراض أي مهمة).<br />
               <b>معلمة:</b> اختاري «دخول المعلمة» واكتبي كلمة المرور <span className="ltr">preview</span>.<br />
               <span className="muted">جرّبي دور الطالبة ثم المعلمة لتري ما سجّلته الطالبة في لوحة المتابعة.</span>
             </p>

@@ -113,7 +113,7 @@ export function Ratings() {
           </label>
           <label className="small row grow">النشاط:
             <select className="input" style={{ minHeight: 36 }} value={activityId} onChange={(e) => setActivityId(e.target.value)}>
-              {lesson?.activities.map((a: any) => <option key={a.id} value={a.id}>({a.id}) {a.title}</option>)}
+              {lesson?.activities.map((a: any) => <option key={a.id} value={a.id}>{a.homework ? 'النشاط البيتي: ' : `(${a.id}) `}{a.title}</option>)}
             </select>
           </label>
         </div>

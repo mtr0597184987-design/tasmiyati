@@ -12,7 +12,7 @@ export interface Catalog {
     id: string; number: number; title: string; status: 'authored' | 'draft'; enabled: boolean;
     courseLesson: { number: number; title: string }; skills: number[]; reinforcedSkills: number[]; integratedSkills: number[]; skillsNote?: string;
     durationMinutes: number; finalOutput: string;
-    progress: { done: number; total: number; current: null | { id: string; title: string; stage: number } };
+    progress: { done: number; total: number; current: null | { id: string; title: string; stage: number; homework?: boolean } };
   }[];
   ai: { mode: 'live' | 'demo' | 'off' };
 }
@@ -44,7 +44,7 @@ export function Home() {
             <p className="muted">هنا تتدربين على مهارات الكتابة خطوة بخطوة: تكتشفين، وتلاحظين، وتخططين، ثم تكتبين بنفسكِ وتحسّنين ما كتبتِ. كل محاولة تقربكِ من الكاتبة التي تريدين أن تكونيها.</p>
             <div className="row">
               <a className="btn" href={href('portfolio')}><Icon name="folder" /> ملف إنجازي الكتابي</a>
-              {totalAll > 0 && <span className="small muted">أنجزتِ {totalDone} من {totalAll} نشاطًا متاحًا</span>}
+              {totalAll > 0 && <span className="small muted">أنجزتِ {totalDone} من {totalAll} مهمة متاحة</span>}
             </div>
           </div>
           <div className="hero-card">
@@ -52,14 +52,14 @@ export function Home() {
               <>
                 <div className="small muted">مهمتكِ الحالية</div>
                 <h2 style={{ margin: '4px 0' }}>{current.progress.current.title}</h2>
-                <p className="small" style={{ opacity: .9 }}>الحصة {current.number}: {current.title}<br />الخطوة {stage?.id}: {stage?.name}</p>
+                <p className="small" style={{ opacity: .9 }}>الحصة {current.number}: {current.title}<br />{current.progress.current.homework ? 'النشاط البيتي' : `المرحلة ${stage?.id}: ${stage?.name}`}</p>
                 <div style={{ margin: '10px 0 14px' }}><Progress value={current.progress.done} total={current.progress.total} /></div>
                 <a className="btn primary lg" href={href(`lesson/${current.id}/${current.progress.current.id}`)}>متابعة التعلم <Icon name="arrowL" size={18} /></a>
               </>
             ) : available.length ? (
               <>
                 <h2>أحسنتِ!</h2>
-                <p>أنهيتِ جميع الأنشطة المتاحة. راجعي ملف إنجازكِ، وانتظري الحصة القادمة.</p>
+                <p>أنهيتِ جميع المهمات المتاحة. راجعي ملف إنجازكِ، وانتظري الحصة القادمة.</p>
                 <a className="btn primary" href={href('portfolio')}>ملف إنجازي الكتابي</a>
               </>
             ) : (
@@ -88,7 +88,7 @@ export function Home() {
                     <h3 style={{ margin: 0 }}>{l.title}</h3>
                     <div className="small muted">{l.skills.map((s) => cat.skills.find((x) => x.id === s)?.studentLabel).filter(Boolean).slice(0, 2).join(' · ')}{l.skills.length > 2 ? ' …' : ''}</div>
                     <div className="grow" />
-                    {l.enabled && <><Progress value={l.progress.done} total={l.progress.total} /><div className="tiny muted">{l.progress.done} / {l.progress.total} أنشطة</div></>}
+                    {l.enabled && <><Progress value={l.progress.done} total={l.progress.total} /><div className="tiny muted">{l.progress.done} / {l.progress.total} مهمات</div></>}
                   </>
                 );
                 return l.enabled

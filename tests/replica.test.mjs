@@ -49,7 +49,7 @@ test('البيانات تبقى في القاعدة السحابية بعد مس
   await t('PATCH', '/api/teacher/lessons/L01', { enabled: true, reviewed: true });
   const s = client();
   assert.equal((await s('POST', '/api/auth/student', { code: codes[0].code })).status, 200);
-  await s('PUT', '/api/activities/1-1/responses', { values: { problem: 'نص محفوظ سحابيًا', suggestion: 'x', personalGoal: 'هدفي' } });
+  await s('PUT', '/api/activities/1-1/responses', { values: { topic: 'ب', goal: 'ب', relation: 'نص محفوظ سحابيًا' } });
   assert.equal((await s('POST', '/api/activities/1-1/complete')).status, 200);
   await new Promise((r) => setTimeout(r, 400));
   const st = (await t('GET', '/api/teacher/settings')).data.storage;
@@ -68,7 +68,7 @@ test('البيانات تبقى في القاعدة السحابية بعد مس
   const s2 = client();
   assert.equal((await s2('POST', '/api/auth/student', { code: codes[0].code })).status, 200);
   const a = (await s2('GET', '/api/activities/1-1')).data;
-  assert.equal(a.values.problem, 'نص محفوظ سحابيًا');
+  assert.equal(a.values.relation, 'نص محفوظ سحابيًا');
   // كتابة جديدة بعد الاستعادة تحمل معرفات متسقة
   await t2('POST', '/api/teacher/students', { count: 1 });
   await new Promise((r) => setTimeout(r, 400));

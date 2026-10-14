@@ -51,12 +51,12 @@ export function Content() {
           {l.activities.length > 0 && (
             <div className="table-scroll" style={{ marginTop: 10 }}>
               <table className="grid">
-                <thead><tr><th>النشاط</th><th>الخطوة</th><th>المساعد</th><th>المهارات</th><th>الدافعية</th><th /></tr></thead>
+                <thead><tr><th>المهمة</th><th>المرحلة</th><th>المساعد</th><th>المهارات</th><th>الدافعية</th><th /></tr></thead>
                 <tbody>
                   {l.activities.map((a: any) => (
                     <tr key={a.id}>
-                      <td>({a.id}) {a.title}</td>
-                      <td className="small">{a.stage}</td>
+                      <td>{a.homework ? 'النشاط البيتي: ' : `(${a.id}) `}{a.title}</td>
+                      <td className="small">{a.homework ? 'بيتي' : a.stage}</td>
                       <td className="small">{a.assistant.name}{l.overridden.includes(a.id) && <span className="badge info" style={{ marginInlineStart: 4 }}>معدّل</span>}</td>
                       <td className="small">{a.skills.join('، ')}</td>
                       <td className="small ltr" style={{ textAlign: 'right' }}>{a.motivation.join(' ')}</td>

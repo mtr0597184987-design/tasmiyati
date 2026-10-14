@@ -80,30 +80,44 @@ test('الصلاحيات: الطالبة لا تصل إلى لوحة المعل�
   assert.equal((await new Client().post('/api/auth/student', { code: 'WRONG' })).status, 401);
 });
 
-test('نسخة الطالبة لا تتضمن مفاتيح الإجابة ولا التلميحات ولا تعليمات المساعد الداخلية', async () => {
+test('نسخة الطالبة لا تتضمن مفاتيح الإجابة ولا التغذية الراجعة للبدائل ولا تعليمات المساعد الداخلية', async () => {
   const r = await s1.get('/api/lessons/L01');
   assert.equal(r.status, 200);
   const raw = JSON.stringify(r.data);
   assert.ok(!raw.includes('answerKey'));
+  assert.ok(!raw.includes('optionFeedback'));
   assert.ok(!raw.includes('constraints'));
   assert.ok(!raw.includes('teacherProcedures'));
-  assert.ok(!raw.includes('في مجال الرياضة مثلًا')); // نص تلميح
-  assert.ok(!raw.includes('يمكن الإحاطة به في موضوع واحد')); // معيار لا يُكشف قبل المحاولة
-  assert.equal(Object.keys(r.data.statuses).length, 8);
+  assert.ok(!raw.includes('أحسنتِ. هذا موضوع محدد ينطلق من المشكلة')); // تغذية راجعة لبديل
+  assert.ok(!raw.includes('ولا تقترحي عليها موضوعًا بديلًا')); // تعليمات زر المساعد
+  assert.ok(raw.includes('"checkable":true'));
+  assert.equal(Object.keys(r.data.statuses).length, 8); // سبع مهمات ونشاط بيتي
   assert.equal(r.data.statuses['1-1'], 'available');
   assert.equal(r.data.statuses['1-2'], 'locked');
+  const l = r.data.lesson;
+  assert.equal(l.title, 'اختيار موضوع الكتابة وتحديد الهدف');
+  assert.deepEqual(l.activities.map((a) => a.minutes ?? null), [4, 6, 5, 5, 9, 11, 5, null]);
+  assert.ok(l.activities[7].homework);
+  assert.equal(l.activities[0].worksheet.sections[0].title, 'ساعدي سارة على اتخاذ القرار');
+  assert.equal(l.objectives.length, 6);
+  assert.equal(l.rubric.levels.map((x) => x.label).join('|'), 'متحقق|يحتاج إلى تحسين');
 });
 
 test('الحصة غير المتاحة مغلقة أمام الطالبة', async () => {
   assert.equal((await s1.get('/api/lessons/L02')).status, 403);
 });
 
-test('ضبط الانتقال: لا يُفتح النشاط التالي قبل استيفاء متطلبات الحالي', async () => {
+test('ضبط الانتقال، والفحص الموضوعي بتغذية راجعة لكل بديل', async () => {
   assert.equal((await s1.get('/api/activities/1-2')).status, 403);
   const c = await s1.post('/api/activities/1-1/complete');
   assert.equal(c.status, 400);
-  assert.ok(c.data.missing.length === 3);
-  await s1.put('/api/activities/1-1/responses', { values: { problem: 'لم تحدد موضوعًا', suggestion: 'أن تسأل نفسها: عمّ أكتب ولمن؟', personalGoal: 'أن أختار موضوعًا دقيقًا' } });
+  assert.equal(c.data.missing.length, 2);
+  let r = await s1.put('/api/activities/1-1/responses', { values: { topic: 'أ' } });
+  assert.equal(r.data.checks.topic.correct, false);
+  assert.ok(r.data.checks.topic.message.includes('مجال واسع'));
+  r = await s1.put('/api/activities/1-1/responses', { values: { topic: 'ب', goal: 'ب' } });
+  assert.equal(r.data.checks.topic.correct, true);
+  assert.ok(r.data.checks.goal.message.startsWith('إجابة دقيقة'));
   assert.equal((await s1.post('/api/activities/1-1/complete')).status, 200);
   assert.equal((await s1.get('/api/activities/1-2')).status, 200);
 });
@@ -112,120 +126,104 @@ test('الوضع التجريبي يعرض الأسئلة بالتتابع وي�
   const r1 = await s2.post('/api/activities/1-1/chat', { message: 'نعم مستعدة' });
   assert.equal(r1.status, 200);
   assert.equal(r1.data.mode, 'demo');
-  assert.ok(r1.data.reply.includes('ما المشكلة التي واجهت سارة؟'));
+  assert.ok(r1.data.reply.includes('ما الصعوبة التي واجهت سارة'));
   const r2 = await s2.post('/api/activities/1-1/chat', { message: 'لم تحدد موضوعها' });
-  assert.ok(r2.data.reply.includes('أشياء مهمة في حياتنا'));
+  assert.ok(r2.data.reply.includes('لماذا يساعد الموضوع المحدد'));
 });
 
-test('الكشف عن المعايير بعد استنتاج الطالبة، والفحص الموضوعي للترتيب', async () => {
-  let r = await s1.put('/api/activities/1-2/responses', { values: { criteria: ['الوضوح'] } });
-  assert.equal(r.data.reveal.length, 0, 'معيار واحد لا يكفي (الحد الأدنى اثنان)');
-  r = await s1.put('/api/activities/1-2/responses', { values: { criteria: ['الوضوح', 'التحديد'] } });
-  assert.equal(r.data.reveal.length, 1);
-  await s1.put('/api/activities/1-2/responses', { values: {
-    classification: { a: 'domain', b: 'domain', c: 'topic', d: 'domain', e: 'topic' }, classificationReason: 'لأن...', environmentTopic: 'أثر فرز النفايات في نظافة المدرسة',
-    healthTopic: 'أثر النوم المبكر في تركيز الطالبات', healthReason: 'واضح ومحدد',
-  } });
+test('المطابقة بالقوائم لا تُفحص قبل اكتمالها، ثم تُفحص صفًّا صفًّا', async () => {
+  let r = await s1.put('/api/activities/1-2/responses', { values: { genreMatch: { i1: 'k4', i2: 'k2' } } });
+  assert.equal(r.data.checks.genreMatch, undefined);
+  r = await s1.put('/api/activities/1-2/responses', { values: { genreMatch: { i1: 'k4', i2: 'k1', i3: 'k3', i4: 'k1' } } });
+  assert.deepEqual(r.data.checks.genreMatch.detail, [true, false, true, true]);
+  await s1.put('/api/activities/1-2/responses', { values: { genreMatch: { i1: 'k4', i2: 'k2', i3: 'k3', i4: 'k1' }, goal: 'تشجيع الزميلات على القراءة', audience: 'أ', style: 'نعم' } });
   assert.equal((await s1.post('/api/activities/1-2/complete')).status, 200);
-  await s1.put('/api/activities/1-3/responses', { values: {
-    commonTopic: 'البيئة المدرسية', rule: 'الهدف والجمهور يحددان طريقة الكتابة', newTopic: 'الحملة التطوعية', newGoal: 'الإقناع', newAudience: 'الزميلات',
-    comparison: { s1: { goal: 'اقتراح', audience: 'الإدارة', style: 'رسمي' }, s2: { goal: 'توعية', audience: 'الطالبات', style: 'ودي' }, s3: { goal: 'تعريف', audience: 'الجديدات', style: 'ترحيبي' } },
-  } });
+  await s1.put('/api/activities/1-3/responses', { values: { relation: 'كل عنصر يحدد ما بعده', better: 'o2', reason: 'أدق' } });
   assert.equal((await s1.post('/api/activities/1-3/complete')).status, 200);
-  r = await s1.put('/api/activities/1-4/responses', { values: { procedureOrder: ['s1', 's2', 's3', 's5', 's4', 's6', 's7'], whyNotFirst: 'واسع', strongVsWeak: 'الجمهور والهدف' } });
-  assert.equal(r.data.checks.procedureOrder.correct, false);
-  assert.deepEqual(r.data.checks.procedureOrder.detail, [true, true, true, false, false, true, true]);
-  r = await s1.put('/api/activities/1-4/responses', { values: { procedureOrder: ['s1', 's2', 's3', 's4', 's5', 's6', 's7'] } });
-  assert.equal(r.data.checks.procedureOrder.correct, true);
+  await s1.put('/api/activities/1-4/responses', { values: { domain: 'الحياة المدرسية', topic: 'الرياضة', topicReviewed: 'الرياضة' } });
   assert.equal((await s1.post('/api/activities/1-4/complete')).status, 200);
-});
-
-test('التلميحات المتدرجة وتخفيض المساندة في التحدي الثالث', async () => {
-  await s1.put('/api/activities/1-5/responses', { values: { domain: 'الصحة', alternatives: ['الصحة', 'النوم'], topic: 'أثر النوم', reason: 'يهمني', goal: 'التوعية', audience: 'الطالبات', verification: 'بالمعايير' } });
+  // جدول بطاقة تدريبية بخلية اختيار
+  r = await s1.put('/api/activities/1-5/responses', { values: { weak: 'الموضوع', newTopic: 'أثر القراءة', newGoal: 'التشجيع', card: { r1: { c1: 'البيئة' }, r2: { c1: 'الهدر' }, r3: { c1: 'التوعية' }, r4: { c1: 'الطالبات' } }, peerGave: 'جيد', peerNeed: 'o2' } });
+  assert.equal((await s1.post('/api/activities/1-5/complete')).status, 400, 'خلية الفن التعبيري فارغة');
+  await s1.put('/api/activities/1-5/responses', { values: { card: { r1: { c1: 'البيئة' }, r2: { c1: 'الهدر' }, r3: { c1: 'التوعية' }, r4: { c1: 'الطالبات' }, r5: { c1: 'المقال' } } } });
   assert.equal((await s1.post('/api/activities/1-5/complete')).status, 200);
-  let h = await s1.post('/api/activities/1-6/hint', { section: 'task1' });
-  assert.equal(h.data.hints.length, 1);
-  h = await s1.post('/api/activities/1-6/hint', { section: 'task1' });
-  h = await s1.post('/api/activities/1-6/hint', { section: 'task1' });
-  assert.equal(h.data.hints.length, 3);
-  assert.equal(h.data.done, true);
-  assert.equal(h.data.hints[2].kind, 'مثال من مجال مختلف');
-  assert.equal((await s1.post('/api/activities/1-6/hint', { section: 'task3' })).status, 400, 'لا تلميح قبل المحاولة');
-  const r = await s1.put('/api/activities/1-6/responses', { values: { t2Choice: 'o2' } });
-  assert.equal(r.data.checks.t2Choice.correct, false);
-  await s1.put('/api/activities/1-6/responses', { values: { t3Topic: 'أثر المشي' } });
-  assert.equal((await s1.post('/api/activities/1-6/hint', { section: 'task3' })).status, 200);
-  await s1.put('/api/activities/1-6/responses', { values: {
-    t1Topic: 'أثر العمل التطوعي في تحمل المسؤولية', t1Goal: 'التوعية', t1Audience: 'الطالبات', t2Choice: 'o1', t2Reason: 'يتصل بالموضوع', t2Audience: 'الطالبات',
-    t3Domain: 'الصحة', t3Goal: 'التوعية', t3Audience: 'الطالبات', improvement: 'تحديد الجمهور',
-  } });
-  assert.equal((await s1.post('/api/activities/1-6/complete')).status, 200);
 });
 
-test('الإنتاج المستقل: منع برمجي للتوليد، وحفظ النسخة الأولية مع وقت التسليم، وعدم تعديلها', async () => {
-  assert.equal((await s1.post('/api/activities/1-6/chat', { message: 'قبل البدء' })).status, 200, 'المساعد يعمل قبل فتح الإنتاج المستقل');
-  await s1.post('/api/activities/1-7/open');
-  const blocked = await s1.post('/api/activities/1-7/chat', { message: 'اكتبي لي الموضوع' });
-  assert.equal(blocked.status, 423);
-  const blockedOther = await s1.post('/api/activities/1-6/chat', { message: 'اكتبي لي موضوعًا عن الصحة' });
-  assert.equal(blockedOther.status, 423, 'التوليد معطل في كل أنشطة الحصة أثناء الإنتاج المستقل');
-  const a = await s1.get('/api/activities/1-6');
-  assert.equal(a.data.chatBlocked, 'independent_lesson');
-  const miss = await s1.post('/api/activities/1-7/submit', { values: { domain: 'الرياضة' } });
-  assert.equal(miss.status, 400);
-  const ok = await s1.post('/api/activities/1-7/submit', { values: { domain: 'الرياضة', topic: 'الرياضة', goal: 'التوعية بفوائد الرياضة', audience: 'الطالبات', justification: 'لأنها مهمة' }, meta: { pasteCount: 1 } });
+test('أزرار المساعد المسماة في الدليل ترسل تعليمتها إلى سياق المساعد دون أن تظهر للطالبة', async () => {
+  const a = await s1.get('/api/activities/1-5');
+  assert.equal(a.status, 200);
+  const r = await s1.post('/api/activities/1-5/chat', { message: '«فحص اختياراتي»', assist: 'a2' });
+  assert.equal(r.status, 200);
+  const chat = (await s1.get('/api/activities/1-5')).data.chat;
+  assert.equal(chat.at(-2).content, '«فحص اختياراتي»');
+});
+
+test('الإنتاج المستقل: منع برمجي للتوليد، وحفظ النسخة الأصلية مع وقت التسليم، وعدم تعديلها', async () => {
+  assert.equal((await s1.post('/api/activities/1-5/chat', { message: 'قبل البدء' })).status, 200, 'المساعد يعمل قبل فتح الإنتاج المستقل');
+  await s1.post('/api/activities/1-6/open');
+  assert.equal((await s1.post('/api/activities/1-6/chat', { message: 'اكتبي لي الموضوع' })).status, 423);
+  assert.equal((await s1.post('/api/activities/1-5/chat', { message: 'اكتبي لي موضوعًا' })).status, 423, 'التوليد معطل في كل مهمات الحصة أثناء الإنتاج المستقل');
+  assert.equal((await s1.get('/api/activities/1-5')).data.chatBlocked, 'independent_lesson');
+  assert.equal((await s1.post('/api/activities/1-6/submit', { values: { domain: 'الرياضة' } })).status, 400);
+  const ok = await s1.post('/api/activities/1-6/submit', { values: { domain: 'الرياضة', topic: 'الرياضة', goal: 'التوعية بفوائد الرياضة', audience: 'الطالبات', genre: 'المقال', reason: 'لأنها مهمة' }, meta: { pasteCount: 1 } });
   assert.equal(ok.status, 200);
   assert.ok(ok.data.meta.submittedAt);
-  assert.equal((await s1.put('/api/activities/1-7/responses', { values: { topic: 'تعديل' } })).status, 409);
-  assert.equal((await s1.post('/api/activities/1-7/submit', { values: {} })).status, 409);
-  assert.equal((await s1.post('/api/activities/1-6/chat', { message: 'بعد التسليم' })).status, 200, 'يعود المساعد بعد التسليم');
+  assert.equal((await s1.put('/api/activities/1-6/responses', { values: { topic: 'تعديل' } })).status, 409);
+  assert.equal((await s1.post('/api/activities/1-6/submit', { values: {} })).status, 409);
+  assert.equal((await s1.post('/api/activities/1-5/chat', { message: 'بعد التسليم' })).status, 200, 'يعود المساعد بعد التسليم');
 });
 
-test('التقويم والتحسين: التقويم الذاتي أولًا، ثم الملاحظات، ثم النسخة المحسنة والمقارنة', async () => {
-  assert.equal((await s1.post('/api/activities/1-8/feedback')).status, 400, 'لا ملاحظات قبل التقويم الذاتي');
-  assert.equal((await s1.put('/api/activities/1-8/revised', { values: { topic: 'x' } })).status, 400, 'لا تعديل قبل التقويم الذاتي');
-  const ratings = { c1: { level: 'met' }, c2: { level: 'partial', note: 'واسع قليلًا' }, c3: { level: 'met' }, c4: { level: 'met' } };
-  let r = await s1.put('/api/activities/1-8/self-assessment', { ratings });
+test('التقويم والتحسين بمستويين: التقويم الذاتي أولًا، ثم الملاحظات، ثم النسخة المحسنة مع الاحتفاظ بالأصلية', async () => {
+  const ev = (await s1.get('/api/lessons/L01')).data.lesson.activities[6];
+  assert.equal(ev.evaluation.analyzeLabel, 'تحليل بطاقة موضوعي');
+  assert.equal((await s1.post('/api/activities/1-7/feedback')).status, 400, 'لا ملاحظات قبل التقويم الذاتي');
+  assert.equal((await s1.put('/api/activities/1-7/revised', { values: { topic: 'x' } })).status, 400);
+  const ratings = { c1: { level: 'met' }, c2: { level: 'needs', note: 'واسع' }, c3: { level: 'met' }, c4: { level: 'met' } };
+  let r = await s1.put('/api/activities/1-7/self-assessment', { ratings });
   assert.equal(r.data.complete, false);
-  r = await s1.put('/api/activities/1-8/self-assessment', { ratings: { ...ratings, c5: { level: 'partial' } } });
+  r = await s1.put('/api/activities/1-7/self-assessment', { ratings: { ...ratings, c5: { level: 'partial' } } });
+  assert.equal(r.data.complete, false, 'المستوى غير المعتمد يُرفض');
+  r = await s1.put('/api/activities/1-7/self-assessment', { ratings: { ...ratings, c5: { level: 'met' } } });
   assert.equal(r.data.complete, true);
-  const fb = await s1.post('/api/activities/1-8/feedback');
-  assert.equal(fb.status, 503, 'في الوضع التجريبي لا تُعرض ملاحظات مختلقة');
+  const fb = await s1.post('/api/activities/1-7/feedback');
+  assert.equal(fb.status, 503);
   assert.equal(fb.data.kind, 'demo');
-  r = await s1.put('/api/activities/1-8/revised', { values: { domain: 'الرياضة', topic: 'أثر المشي اليومي في تركيز طالبات الصف الأول الثانوي', goal: 'التوعية', audience: 'طالبات الصف الأول الثانوي', justification: 'متسق' } });
+  assert.equal((await s1.post('/api/activities/1-7/complete')).status, 400, 'النسخة المحسنة مطلوبة');
+  r = await s1.put('/api/activities/1-7/revised', { values: { domain: 'الرياضة', topic: 'أثر المشي اليومي في تركيز طالبات الصف الأول الثانوي', goal: 'التوعية', audience: 'طالبات الصف الأول الثانوي', genre: 'المقال', reason: 'متسق' } });
   assert.equal(r.status, 200);
-  let c = await s1.post('/api/activities/1-8/complete');
-  assert.equal(c.status, 400);
-  assert.deepEqual(c.data.missing.length, 1);
-  await s1.put('/api/activities/1-8/responses', { values: { reflection: 'ضيّقت موضوعي' } });
-  assert.equal((await s1.post('/api/activities/1-8/complete')).status, 200);
+  assert.equal((await s1.post('/api/activities/1-7/complete')).status, 200);
+  // النشاط البيتي بعد المراحل السبع
+  const hw = await s1.get('/api/activities/1-H');
+  assert.equal(hw.status, 200);
+  assert.equal((await s1.post('/api/activities/1-H/complete')).status, 400);
+  await s1.put('/api/activities/1-H/responses', { values: { hwDomain: 'البيئة', hwTopic: 'هدر الطعام', hwGoal: 'التوعية', hwAudience: 'الطالبات', choice: 'o1', choiceReason: 'أقرب إليّ' } });
+  assert.equal((await s1.post('/api/activities/1-H/complete')).status, 200);
   const p = await s1.get('/api/portfolio');
   const l1 = p.data.lessons.find((l) => l.id === 'L01');
   assert.equal(l1.completed, true);
   assert.equal(l1.product.initial.topic, 'الرياضة');
   assert.ok(l1.product.revised.topic.startsWith('أثر المشي'));
-  assert.equal(l1.goals[0], 'أن أختار موضوعًا دقيقًا');
-  assert.equal(l1.planningCards.length, 1);
   assert.ok(p.data.skills.find((s) => s.id === 1));
-  assert.ok(!JSON.stringify(p.data).includes('chatCount'), 'لا يُعرض عدد مرات استخدام المساعد');
-  const html = await s1.get('/api/portfolio/export');
-  assert.ok(String(html.data).includes('ملف إنجازي الكتابي'));
+  assert.ok(!JSON.stringify(p.data).includes('chatCount'));
+  assert.ok(String((await s1.get('/api/portfolio/export')).data).includes('ملف إنجازي الكتابي'));
 });
 
 test('عزل البيانات: الطالبة لا ترى أعمال زميلتها إلا ما اعتمدته المعلمة', async () => {
-  const sh = await s1.post('/api/activities/1-1/share', {});
+  const sh = await s1.post('/api/activities/1-5/share', {});
   assert.equal(sh.status, 200);
   let g = await s2.get('/api/activities/1-1/gallery');
-  assert.equal(g.data.items.length, 0, 'لا يُنشر شيء قبل موافقة المعلمة');
+  assert.equal(g.data.items.length, 0);
   const shares = await teacher.get('/api/teacher/shares');
-  const id = shares.data.shares[0].id;
-  await teacher.patch(`/api/teacher/shares/${id}`, { status: 'approved', scope: 'class' });
-  g = await s2.get('/api/activities/1-1/gallery');
+  const share = shares.data.shares[0];
+  assert.ok(JSON.stringify(share.content).includes('الفن التعبيري المناسب: اختياري=المقال'), 'الجدول يُشارك نصًّا مقروءًا');
+  await teacher.patch(`/api/teacher/shares/${share.id}`, { status: 'approved', scope: 'class' });
+  await teacher.post(`/api/teacher/students/${(await teacher.get('/api/teacher/overview')).data.students.find((s) => s.code === codes[1].code).id}/unlock`, { activityId: '1-5' });
+  g = await s2.get('/api/activities/1-5/gallery');
   assert.equal(g.data.items.length, 1);
   assert.ok(g.data.items[0].author.startsWith('زميلة'));
-  await s2.post(`/api/shares/${id}/comments`, { text: 'أعجبني اقتراحكِ' });
-  g = await s1.get('/api/activities/1-1/gallery');
-  assert.equal(g.data.items[0].comments.length, 0, 'التعليق يظهر بعد مراجعة المعلمة');
+  await s2.post(`/api/shares/${share.id}/comments`, { text: 'أعجبني اختياركِ' });
+  g = await s1.get('/api/activities/1-5/gallery');
+  assert.equal(g.data.items[0].comments.length, 0);
 });
 
 test('لوحة المعلمة: المتابعة، والفتح الاستثنائي، والتصدير', async () => {
@@ -254,7 +252,7 @@ test('المعلمة تعدّل تعليمات المساعد والمعايير
   await teacher.req('DELETE', '/api/teacher/lessons/L01/rubric');
 });
 
-test('ربط النموذج عبر الخادم: التعليمات تُبنى من بيانات النشاط، والمفتاح لا يصل إلى المتصفح', async () => {
+test('ربط النموذج عبر الخادم: التعليمات تُبنى من نص الدليل وبيانات المهمة، والمفتاح لا يصل إلى المتصفح', async () => {
   mockMode = 'chat';
   const set = await teacher.put('/api/teacher/settings', { ai: { provider: 'openai', baseUrl: `http://localhost:${mockPort}/v1`, model: 'mock-model', apiKey: 'sk-secret-key-1234', enabled: true } });
   assert.equal(set.data.ai.keyConfigured, true);
@@ -264,23 +262,30 @@ test('ربط النموذج عبر الخادم: التعليمات تُبنى �
   assert.equal(r.status, 200);
   assert.equal(r.data.mode, 'ai');
   const sys = lastMockRequest.messages[0].content;
-  assert.ok(sys.includes('صديقتي المحفزة للكتابة'));
+  assert.ok(sys.includes('رفيقة التحفيز'));
   assert.ok(sys.includes('التحفيز الذكي'));
+  assert.ok(sys.includes('المهمة (1-1): قبل أن أكتب، ماذا أختار؟'));
+  assert.ok(sys.includes('نشاط (1): ساعدي سارة على اتخاذ القرار'));
+  assert.ok(sys.includes('لاحظت سارة أن بعض الطالبات يشتكين من قلة تنوع الأصناف'));
   assert.ok(sys.includes('خاطبي الطالبة بصيغة المؤنث'));
   assert.ok(sys.includes('تحديد موضوع الكتابة ومجاله تحديدًا دقيقًا.'));
   assert.ok(sys.includes('الكفاءة: الثقة بالقدرة على تعلم مهارات الكتابة وفهمها.'));
   assert.equal(lastMockRequest.messages.at(-1).content, 'أظن أن سارة لم تحدد موضوعها');
+  // زر مسمى: تعليمته في السياق
+  await s1.post('/api/activities/1-4/chat', { message: '«ساعديني على فحص موضوعي»', assist: 'a2' });
+  assert.ok(lastMockRequest.messages[0].content.includes('ضغطت الطالبة زر «ساعديني على فحص موضوعي»'));
   assert.ok(!JSON.stringify(await s2.get('/api/me')).includes('sk-secret'));
 });
 
 test('التغذية الراجعة الذكية تُحلَّل وفق المعايير وتُحفظ، والمعلمة تراجعها', async () => {
   mockMode = 'feedback';
-  const fb = await s1.post('/api/activities/1-8/feedback');
+  const fb = await s1.post('/api/activities/1-7/feedback');
   assert.equal(fb.status, 200);
   assert.equal(fb.data.data.criteria[0].id, 'c2');
   assert.ok(lastMockRequest.messages[0].content.includes('لا تقترحي صياغة بديلة'));
   assert.ok(lastMockRequest.messages[1].content.includes('تقويمها الذاتي'));
-  const a = await s1.get('/api/activities/1-8');
+  assert.ok(lastMockRequest.messages[1].content.includes('يحتاج إلى تحسين'));
+  const a = await s1.get('/api/activities/1-7');
   assert.equal(a.data.evaluation.feedback.length, 1);
 });
 
@@ -288,7 +293,7 @@ test('ربط Gemini: عنوان الخدمة ثابت، والمفتاح عبر 
   mockMode = 'chat';
   const set = await teacher.put('/api/teacher/settings', { ai: { provider: 'gemini', model: 'mock-model', apiKey: 'AIza-gemini-key-9876', enabled: true } });
   assert.equal(set.data.ai.provider, 'gemini');
-  assert.equal(set.data.ai.model, 'gemini-3.8-flash'); // اسم نموذج لا يخص Gemini يُستبدل بالافتراضي
+  assert.equal(set.data.ai.model, 'gemini-3.8-flash');
   assert.ok(set.data.ai.baseUrl.startsWith('https://generativelanguage.googleapis.com/'));
   assert.ok(!JSON.stringify(set.data).includes('AIza-gemini'));
   const r = await s2.post('/api/activities/1-1/chat', { message: 'سؤال إلى Gemini' });
@@ -298,8 +303,7 @@ test('ربط Gemini: عنوان الخدمة ثابت، والمفتاح عبر 
   assert.equal(lastMockMeta.auth, 'Bearer AIza-gemini-key-9876');
   assert.equal(lastMockRequest.model, 'gemini-3.8-flash');
   assert.equal(lastMockRequest.reasoning_effort, 'low');
-  assert.ok(lastMockRequest.messages[0].content.includes('صديقتي المحفزة للكتابة'));
-  // تبديل المزود يحذف مفتاح المزود السابق
+  assert.ok(lastMockRequest.messages[0].content.includes('رفيقة التحفيز'));
   const back = await teacher.put('/api/teacher/settings', { ai: { provider: 'openai', baseUrl: `http://localhost:${mockPort}/v1`, model: 'mock-model', apiKey: 'sk-secret-key-1234' } });
   assert.equal(back.data.ai.keyHint, '…1234');
 });
@@ -326,43 +330,60 @@ test('حذف بيانات طالبة يزيل كل سجلاتها', async () => 
   assert.ok(!JSON.stringify(json.data).includes(codes[1].code));
 });
 
-test('الحصة الثانية: البناء على منتج الحصة الأولى، والمخطط، والفحص بعد التصنيف، والاعتماد', async () => {
+test('الحصة الثانية: البناء على منتج الحصة الأولى، والتصنيف والاختيار المتعدد، وبنك المعلومات جدولًا، والاعتماد', async () => {
   await teacher.patch('/api/teacher/lessons/L02', { enabled: true, reviewed: true });
   const pr = await s1.get('/api/products');
   const p1 = pr.data.products.find((p) => p.lessonId === 'L01');
   assert.equal(p1.version, 'revised');
   assert.ok(p1.data.topic.startsWith('أثر المشي'));
-  await s1.put('/api/activities/2-1/responses', { values: { problem: 'لا أفكار لديها', help: 'أسئلة مساعدة', personalGoal: 'أن أولد أفكارًا' } });
+  await s1.put('/api/activities/2-1/responses', { values: { step: 'ب', info: 'آراء الطالبات' } });
   assert.equal((await s1.post('/api/activities/2-1/complete')).status, 200);
-  let r = await s1.put('/api/activities/2-2/responses', { values: { related: { i1: 'k1', i2: 'k1', i3: 'k1', i4: 'k1' } } });
+  let r = await s1.put('/api/activities/2-2/responses', { values: { related: { i1: 'k1', i2: 'k2', i3: 'k1' } } });
   assert.equal(r.data.checks.related, undefined, 'لا فحص قبل اكتمال التصنيف');
-  r = await s1.put('/api/activities/2-2/responses', { values: { related: { i1: 'k1', i2: 'k1', i3: 'k1', i4: 'k1', i5: 'k2', i6: 'k1' } } });
+  r = await s1.put('/api/activities/2-2/responses', { values: { related: { i1: 'k1', i2: 'k2', i3: 'k1', i4: 'k2', i5: 'k2', i6: 'k1' } } });
   assert.deepEqual(r.data.checks.related.detail, [true, true, true, false, true, true]);
-  await s1.put('/api/activities/2-2/responses', { values: { reason: 'لأن...', mainVsDetail: '...', newIdea: 'فكرة', criteria: ['الارتباط', 'الوضوح'] } });
+  r = await s1.put('/api/activities/2-2/responses', { values: { details: ['m2', 'm3'], mainIdea: 'o1' } });
+  assert.equal(r.data.checks.details.correct, false);
+  r = await s1.put('/api/activities/2-2/responses', { values: { details: ['m4', 'm2', 'm3', 'zz'] } });
+  assert.equal(r.data.checks.details.correct, true, 'الاختيار المتعدد لا يعتمد على الترتيب، ويتجاهل غير المعتمد');
+  await s1.put('/api/activities/2-2/responses', { values: { sources: { i1: 'k1', i2: 'k2', i3: 'k3', i4: 'k4' }, related: { i1: 'k1', i2: 'k2', i3: 'k1', i4: 'k1', i5: 'k2', i6: 'k1' } } });
   assert.equal((await s1.post('/api/activities/2-2/complete')).status, 200);
-  await s1.put('/api/activities/2-3/responses', { values: { questionsUsed: 'ماذا ولماذا', whyExcluded: 'بعيدة', steps: ['s1', 's2', 's3', 's4', 's5'] } });
+  await s1.put('/api/activities/2-3/responses', { values: { relation: '..', difference: '..' } });
   assert.equal((await s1.post('/api/activities/2-3/complete')).status, 200);
-  await s1.put('/api/activities/2-4/responses', { values: { myTopic: 'أثر المشي', aspects: ['أ', 'ب'], questions: ['1', '2', '3'], sources: 'تجربتي', initialIdeas: ['1', '2', '3'] } });
+  const row = (a, b, c) => ({ c1: a, c2: b, c3: c });
+  await s1.put('/api/activities/2-4/responses', { values: { ideas: ['التركيز', 'النشاط', 'المزاج'], plan: { r1: row('التركيز', 'مدة الانتباه', 'ملاحظة'), r2: row('النشاط', 'الحيوية', 'استبانة') } } });
   assert.equal((await s1.post('/api/activities/2-4/complete')).status, 200);
-  // المخطط: ثلاث أفكار وتحت كل منها تفصيل
-  await s1.put('/api/activities/2-5/responses', { values: { practiceIdeas: '1. وضع النفايات في الحاويات\n   - حاوية في كل فصل\n2. تنظيف المقاعد', justify: '..', difference: '..' } });
-  let c = await s1.post('/api/activities/2-5/complete');
-  assert.equal(c.status, 400, 'المخطط ناقص (فكرتان، والثانية بلا تفصيل)');
-  await s1.put('/api/activities/2-5/responses', { values: { practiceIdeas: '1. وضع النفايات في الحاويات\n   - حاوية في كل فصل\n2. تنظيف المقاعد\n   - بعد كل نشاط\n3. التشجير\n   - زراعة شتلات' } });
+  await s1.put('/api/activities/2-5/responses', { values: { picked: ['m1', 'm2', 'm4'], usable: ['m1', 'm2', 'm3'], whyVerify: 'الدقة', peerIdea: 'التركيز', peerInfo: 'دراسة', peerVerify: 'o2', peerGave: 'مثال', organized: { r1: row('أ', 'ب', 'ج'), r2: row('أ', 'ب', 'ج'), r3: row('أ', 'ب', 'ج') } } });
   assert.equal((await s1.post('/api/activities/2-5/complete')).status, 200);
-  const miss = await s1.post('/api/activities/2-6/submit', { values: { topic: 'أثر المشي', ideas: '1. التركيز' } });
-  assert.equal(miss.status, 400);
-  const ok = await s1.post('/api/activities/2-6/submit', { values: { topic: 'أثر المشي', ideas: '1. التركيز\n   - انتباه أطول\n2. النشاط\n   - حيوية الصباح\n3. المزاج\n   - هدوء' } });
-  assert.equal(ok.status, 200);
+  const bank = { r1: { c1: 'التركيز', c2: 'انتباه أطول', c3: 'هدوء', c4: 'ملاحظة' }, r2: { c1: 'النشاط', c2: 'حيوية', c3: 'نوم', c4: 'تحتاج تحقق' } };
+  assert.equal((await s1.post('/api/activities/2-6/submit', { values: { bank, importance: 'مهمة' } })).status, 400, 'الفكرة الثالثة ناقصة');
+  bank.r3 = { c1: 'المزاج', c2: 'هدوء', c3: 'رضا', c4: 'كتاب' };
+  assert.equal((await s1.post('/api/activities/2-6/submit', { values: { bank, importance: 'مهمة' } })).status, 200);
   const p2 = (await s1.get('/api/products')).data.products.find((p) => p.lessonId === 'L02');
   assert.equal(p2.version, 'initial');
-  assert.ok(p2.data.ideas.includes('انتباه أطول'));
+  assert.equal(JSON.parse(p2.data.bank).r1.c2, 'انتباه أطول');
+  const csv = String((await teacher.get('/api/teacher/export.csv')).data);
+  assert.ok(csv.includes('المعلومة أو التفصيل الأول: انتباه أطول'), 'الجدول يُصدَّر نصًّا مقروءًا');
   const st = (await teacher.get('/api/teacher/overview')).data.students.find((s) => s.code === codes[0].code);
   assert.equal((await teacher.post(`/api/teacher/students/${st.id}/approve`, { lessonId: 'L02' })).status, 200);
-  const p2b = (await s1.get('/api/products')).data.products.find((p) => p.lessonId === 'L02');
-  assert.ok(p2b.approvedAt);
-  const port = await s1.get('/api/portfolio');
-  assert.ok(port.data.journey.find((j) => j.lessonId === 'L02').data);
+  assert.ok((await s1.get('/api/products')).data.products.find((p) => p.lessonId === 'L02').approvedAt);
+  const html = String((await s1.get('/api/portfolio/export')).data);
+  assert.ok(html.includes('انتباه أطول') && !html.includes('{&quot;'));
+});
+
+test('أداة المخطط: تُحفظ نصًّا منظمًا وتُتحقق من اكتمالها', async () => {
+  for (const id of ['L03', 'L04', 'L05']) await teacher.patch(`/api/teacher/lessons/${id}`, { enabled: true, reviewed: true });
+  const st = (await teacher.get('/api/teacher/overview')).data.students.find((s) => s.code === codes[0].code);
+  await teacher.post(`/api/teacher/students/${st.id}/unlock`, { activityId: '5-6' });
+  const plan = { mode: 'tree', topic: 'أثر المشي', ideas: [{ element: 'المقدمة', idea: 'التركيز', details: ['انتباه'], method: '' }, { element: 'العرض', idea: 'النشاط', details: [] }] };
+  assert.equal((await s1.post('/api/activities/5-6/submit', { values: { plan: JSON.stringify(plan), why: 'مناسب' } })).status, 400, 'فكرتان فقط والثانية بلا تفصيل');
+  plan.ideas[1].details = ['حيوية']; plan.ideas.push({ element: 'الخاتمة', idea: 'المزاج', details: ['هدوء'] });
+  plan.mode = 'nonsense';
+  assert.equal((await s1.post('/api/activities/5-6/submit', { values: { plan: JSON.stringify(plan), why: 'مناسب' } })).status, 400, 'شكل التخطيط مطلوب');
+  plan.mode = 'fishbone';
+  assert.equal((await s1.post('/api/activities/5-6/submit', { values: { plan: JSON.stringify(plan), why: 'مناسب' } })).status, 200);
+  const p5 = (await s1.get('/api/products')).data.products.find((p) => p.lessonId === 'L05');
+  assert.equal(JSON.parse(p5.data.plan).mode, 'fishbone');
 });
 
 test('الأسماء: تضيفها المعلمة، وتراها الطالبة نفسها فقط، ولا تصل إلى النموذج ولا إلى التصدير إلا باختيار', async () => {
@@ -403,7 +424,7 @@ test('سلالم التقدير: بنود من المهارات المعتمدة
   r = await teacher.put(`/api/teacher/students/${sid}/ratings`, { activityId: '1-1', values: { [c2.id]: null, [c1.id]: 9 } });
   assert.deepEqual(r.data.values, { [c1.id]: 4 }); // مستوى غير موجود يُرفض، وnull يمحو
   // الإنتاج المستقل يستخدم معايير الحصة
-  const ind = await teacher.get('/api/teacher/ratings/1-7');
+  const ind = await teacher.get('/api/teacher/ratings/1-6');
   assert.ok(ind.data.criteria[0].id.startsWith('r-'));
   // تعديل البنود ثم الاستعادة
   await teacher.put('/api/teacher/activities/1-1/scale', { criteria: [{ id: c1.id, text: 'بند معدّل' }, { text: 'بند جديد' }] });

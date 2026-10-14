@@ -1,6 +1,8 @@
 // «منتجاتي السابقة»: تعرض للطالبة أحدث نسخة من منتجاتها في الحصص السابقة لتبني عليها.
 import type { Activity } from '../../../shared/types';
-import { parseOutline } from '../../../shared/outline';
+import { parseOutline, parsePlanner, parseTable } from '../../../shared/outline';
+import { DisplayTable } from './Worksheet';
+import { PlannerView } from './Planner';
 import { Icon } from '../icons';
 import { fmtDate } from '../ui';
 
@@ -10,10 +12,15 @@ export interface Product {
   data: Record<string, string> | null; version: 'initial' | 'revised' | null; updatedAt: string | null; approvedAt: string | null;
 }
 
-export function ProductValue({ type, value }: { type: string; value: string }) {
+export function ProductValue({ type, value, field }: { type: string; value: string; field?: any }) {
   if (type === 'outline') {
     const items = parseOutline(value);
     return <ol className="outline-view">{items.map((it, i) => <li key={i}><b>{it.idea}</b>{it.details.length > 0 && <ul>{it.details.map((d, k) => <li key={k}>{d}</li>)}</ul>}</li>)}</ol>;
+  }
+  if (type === 'planner') return <PlannerView value={parsePlanner(value)} />;
+  if (type === 'table' && field?.rows) {
+    const v = parseTable(value);
+    return <DisplayTable rows={[[field.rowHeader ?? '', ...(field.columns ?? []).map((c: any) => c.label)], ...field.rows.map((r: any) => [r.label, ...(field.columns ?? []).map((c: any) => v?.[r.id]?.[c.id] || '—')])]} />;
   }
   return <div className="prod-val">{value || '—'}</div>;
 }
@@ -29,12 +36,12 @@ export function ProductsPanel({ ids, products }: { ids: string[]; products: Prod
             <b>الحصة {p.number}: {p.title}</b>
             <span className="row" style={{ gap: 6 }}>
               {p.approvedAt && <span className="badge ok">اعتمدته المعلمة</span>}
-              {p.version ? <span className="badge">{p.version === 'revised' ? 'النسخة المحسنة' : 'النسخة الأولية'}</span> : <span className="badge warn">لم يُسلَّم بعد</span>}
+              {p.version ? <span className="badge">{p.version === 'revised' ? 'النسخة المحسنة' : 'النسخة الأصلية'}</span> : <span className="badge warn">لم يُسلَّم بعد</span>}
             </span>
           </summary>
           {p.data ? (
             <dl className="kv" style={{ marginTop: 8 }}>
-              {p.fields.map((f) => <div key={f.id} style={{ display: 'contents' }}><dt>{f.label}</dt><dd><ProductValue type={f.type} value={p.data![f.id] ?? ''} /></dd></div>)}
+              {p.fields.map((f) => <div key={f.id} style={{ display: 'contents' }}><dt>{f.label}</dt><dd><ProductValue type={f.type} field={f} value={p.data![f.id] ?? ''} /></dd></div>)}
             </dl>
           ) : (
             <p className="small muted" style={{ marginTop: 6 }}>

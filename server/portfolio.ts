@@ -1,3 +1,4 @@
+import { productText } from '../shared/outline.ts';
 // ملف الإنجاز الكتابي للطالبة. لا يُعرض فيه عدد مرات استخدام المساعد؛ فهو ليس مؤشرًا على جودة الكتابة أو الدافعية.
 import { all, get, parse } from './db.ts';
 import { activityFields, allLessons, loadContent } from './content.ts';
@@ -78,8 +79,8 @@ export function portfolioHtml(d: ReturnType<typeof portfolioData>): string {
       ${l.activities.map((a) => `<tr><td>(${a.id}) ${esc(a.title)}</td><td>${a.status === 'completed' ? 'مكتمل' : a.status === 'in_progress' ? 'قيد الإنجاز' : '—'}</td><td>${esc(a.completedAt ?? '')}</td></tr>`).join('')}</table>
       ${l.goals.length ? `<h3>أهدافي الشخصية</h3><ul>${l.goals.map((g) => `<li>${esc(g)}</li>`).join('')}</ul>` : ''}
       ${l.planningCards.map((p) => `<h3>بطاقة التخطيط</h3><table>${p.rows.map((r) => `<tr><th>${esc(r.label)}</th><td>${esc(r.value)}</td></tr>`).join('')}</table>`).join('')}
-      ${l.product ? `<h3>منتجي الكتابي: النسخة الأولية والمحسنة</h3><table><tr><th></th><th>النسخة الأولية</th><th>النسخة المحسنة</th></tr>
-        ${l.product.fields.map((f) => `<tr><th>${esc(f.label)}</th><td>${esc(l.product!.initial[f.id])}</td><td>${esc(l.product!.revised?.[f.id] ?? '—')}</td></tr>`).join('')}</table>` : ''}
+      ${l.product ? `<h3>منتجي الكتابي: النسخة الأصلية والمحسنة</h3><table><tr><th></th><th>النسخة الأصلية</th><th>النسخة المحسنة</th></tr>
+        ${l.product.fields.map((f) => `<tr><th>${esc(f.label)}</th><td style="white-space:pre-wrap">${esc(productText(f, l.product!.initial[f.id]))}</td><td style="white-space:pre-wrap">${esc(l.product!.revised ? productText(f, l.product!.revised[f.id]) : '—')}</td></tr>`).join('')}</table>` : ''}
       ${l.selfAssessment.length ? `<h3>تقويمي الذاتي</h3><table>${l.selfAssessment.map((s) => `<tr><th>${esc(s.criterion)}</th><td>${esc(s.level)}${s.note ? ' — ' + esc(s.note) : ''}</td></tr>`).join('')}</table>` : ''}
       ${l.feedback.map((f) => `<h3>${f.source === 'ai' ? 'ملاحظات المساعد التشخيصية' : 'ملاحظات المعلمة'}</h3>${f.data.raw ? `<p>${esc(f.data.raw)}</p>` : f.data.text ? `<p>${esc(f.data.text)}</p>` : `<ul>${(f.data.criteria ?? []).map((c: any) => `<li>${esc(c.observation)} ${c.question ? `<em>${esc(c.question)}</em>` : ''}</li>`).join('')}</ul>`}`).join('')}
       ${l.reflections.length ? `<h3>تأملاتي</h3>${l.reflections.map((r) => `<p><strong>${esc(r.question)}</strong><br>${esc(r.text)}</p>`).join('')}` : ''}
@@ -91,7 +92,7 @@ h1{color:#1f5f5b}h2{border-bottom:2px solid #e6dfd2;padding-bottom:4px}table{bor
 .tag{font-size:13px;background:#dcefe9;color:#1f5f5b;border-radius:99px;padding:2px 10px}article{margin-bottom:32px}@media print{article{break-inside:avoid-page}}</style></head>
 <body><h1>ملف إنجازي الكتابي — تسمياتي</h1><p>${esc(d.student.label)}${d.student.group ? ' · ' + esc(d.student.group) : ''} · أُنشئ في ${esc(d.generatedAt.slice(0, 10))}</p>
 ${d.finalText ? `<section class="final"><h2>موضوعي الكامل</h2><h3 style="text-align:center">${esc(d.finalText.title)}</h3>${[d.finalText.intro, d.finalText.body, d.finalText.conclusion].join('\n').split(/\n+/).filter((p) => p.trim()).map((p) => `<p>${esc(p)}</p>`).join('')}</section>` : ''}
-${sec('رحلة موضوعي من التخطيط إلى النسخة النهائية', d.journey.filter((j) => j.data).map((j) => `<h3>الحصة ${j.number}: ${esc(j.title)} ${j.approvedAt ? '<span class="tag">اعتمدته المعلمة</span>' : ''}</h3><table>${j.fields.map((f) => `<tr><th>${esc(f.label)}</th><td style="white-space:pre-wrap">${esc(j.data![f.id])}</td></tr>`).join('')}</table>`).join(''))}
+${sec('رحلة موضوعي من التخطيط إلى النسخة النهائية', d.journey.filter((j) => j.data).map((j) => `<h3>الحصة ${j.number}: ${esc(j.title)} ${j.approvedAt ? '<span class="tag">اعتمدته المعلمة</span>' : ''}</h3><table>${j.fields.map((f) => `<tr><th>${esc(f.label)}</th><td style="white-space:pre-wrap">${esc(productText(f, j.data![f.id]))}</td></tr>`).join('')}</table>`).join(''))}
 ${sec('المهارات التي تدربتُ عليها', d.skills.length ? `<ul>${d.skills.map((s) => `<li>${esc(s.text)} <small>(${s.activities} نشاط)</small></li>`).join('')}</ul>` : '')}
 ${lessons || '<p>لم يبدأ العمل في الحصص بعد.</p>'}
 <footer style="margin-top:40px;text-align:center;color:#76838e;font-size:13px">إعداد: تهاني محمد المحياوي</footer></body></html>`;

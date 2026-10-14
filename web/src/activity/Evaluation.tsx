@@ -1,13 +1,16 @@
 // الخطوة السابعة: تقويم ذاتي أولًا ← ملاحظات تشخيصية ← تحسين تنفذه الطالبة بنفسها ← مقارنة النسختين.
 import { Fragment, useState } from 'react';
-import type { Lesson } from '../../../shared/types';
+import type { Activity, Lesson } from '../../../shared/types';
 import { api } from '../api';
 import { FieldView } from './Worksheet';
+import { parseTable, productText, type ProductFieldLike } from '../../../shared/outline';
 import { ProductValue } from './Products';
 import { Icon } from '../icons';
 import { Alert, fmtDate, useApp } from '../ui';
 
-export function Evaluation({ lesson, activityId, data, onRefresh }: { lesson: Lesson; activityId: string; data: any; onRefresh: () => void }) {
+export function Evaluation({ lesson, activity, data, onRefresh, between }: { lesson: Lesson; activity: Activity; data: any; onRefresh: () => void; between?: React.ReactNode }) {
+  const activityId = activity.id;
+  const analyze = activity.evaluation?.analyzeLabel;
   const { toast } = useApp();
   const rubric = lesson.rubric!;
   const fields = lesson.productFields ?? [];
@@ -19,7 +22,7 @@ export function Evaluation({ lesson, activityId, data, onRefresh }: { lesson: Le
   const [revised, setRevised] = useState<Record<string, string>>(data.revised?.data ?? initial?.data ?? {});
   const [revSaved, setRevSaved] = useState<Record<string, string> | null>(data.revised?.data ?? null);
 
-  if (!initial) return <Alert kind="warn">سلّمي إنتاجكِ المستقل أولًا في الخطوة السادسة، ثم عودي لتقويمه وتحسينه.</Alert>;
+  if (!initial) return <Alert kind="warn">سلّمي إنتاجكِ المستقل أولًا في مرحلة الإنتاج الكتابي المستقل، ثم عودي لتقويمه وتحسينه.</Alert>;
 
   const allRated = rubric.criteria.every((c) => self[c.id]?.level);
   const step = !selfSaved ? 1 : !revSaved ? 3 : 4;
@@ -66,15 +69,15 @@ export function Evaluation({ lesson, activityId, data, onRefresh }: { lesson: Le
       </div>
 
       <section className="card flat">
-        <div className="card-title"><Icon name="pen" /> نسختي الأولية <span className="tiny muted">(سُلِّمت {fmtDate(initial.meta?.submittedAt)} — لا تتغير)</span></div>
-        <dl className="kv">{fields.map((f) => <Fragment key={f.id}><dt>{f.label}</dt><dd><ProductValue type={f.type} value={initial.data[f.id] ?? ''} /></dd></Fragment>)}</dl>
+        <div className="card-title"><Icon name="pen" /> نسختي الأصلية <span className="tiny muted">(سُلِّمت {fmtDate(initial.meta?.submittedAt)} — محفوظة كما هي)</span></div>
+        <dl className="kv">{fields.map((f) => <Fragment key={f.id}><dt>{f.label}</dt><dd><ProductValue type={f.type} field={f} value={initial.data[f.id] ?? ''} /></dd></Fragment>)}</dl>
       </section>
 
       <section className="card flat">
         <div className="card-title"><span className="lesson-num" style={{ width: 28, height: 28 }}>1</span> أقوّم إنتاجي وفق المعايير</div>
         <div className="table-scroll">
           <table className="grid rubric">
-            <thead><tr><th>المعيار</th>{rubric.levels.map((l) => <th key={l.id} className="lv">{l.label}</th>)}<th>دليلي أو ملاحظتي (اختياري)</th></tr></thead>
+            <thead><tr><th>{rubric.header ?? 'معيار التقويم'}</th>{rubric.levels.map((l) => <th key={l.id} className="lv">{l.label}</th>)}<th>دليلي أو ملاحظتي (اختياري)</th></tr></thead>
             <tbody>
               {rubric.criteria.map((c, i) => (
                 <tr key={c.id}>
@@ -110,7 +113,7 @@ export function Evaluation({ lesson, activityId, data, onRefresh }: { lesson: Le
             {fbError && <Alert kind={fbError.kind === 'demo' ? 'info' : 'danger'}>{fbError.msg}</Alert>}
             <div className="row" style={{ marginTop: 8 }}>
               <button className="btn" onClick={askFeedback} disabled={busy === 'fb'}>
-                <Icon name="chat" size={18} /> {busy === 'fb' ? 'يقرأ المساعد إنتاجكِ...' : data.feedback.some((f: any) => f.source === 'ai') ? 'اطلبي ملاحظات مرة أخرى' : 'اطلبي الملاحظات التشخيصية'}
+                <Icon name="chat" size={18} /> {busy === 'fb' ? 'يقرأ المساعد إنتاجكِ...' : data.feedback.some((f: any) => f.source === 'ai') ? `${analyze ?? 'اطلبي الملاحظات'} مرة أخرى` : analyze ?? 'اطلبي الملاحظات التشخيصية'}
               </button>
               <span className="tiny muted">الملاحظات الذكية إرشادية، والحكم النهائي لمعلمتكِ.</span>
             </div>
@@ -118,6 +121,7 @@ export function Evaluation({ lesson, activityId, data, onRefresh }: { lesson: Le
         )}
       </section>
 
+      {between}
       <section className="card flat">
         <div className="card-title"><span className="lesson-num" style={{ width: 28, height: 28 }}>3</span> أحسّن منتجي بنفسي</div>
         {!selfSaved ? <p className="muted small">تُتاح مساحة التعديل بعد التقويم الذاتي.</p> : (
@@ -125,11 +129,11 @@ export function Evaluation({ lesson, activityId, data, onRefresh }: { lesson: Le
             <p className="small muted">عدّلي ما ترين أنه يحتاج إلى تحسين في ضوء المعايير والملاحظات. التعديل قراركِ أنتِ.</p>
             <div className="stack">
               {fields.map((f) => (
-                <FieldView key={f.id} field={{ ...f, type: f.type === 'text' || f.type === 'chips' ? 'textarea' : f.type, required: false, defaultValue: undefined, mustChange: false }}
-                  value={revised[f.id] ?? ''} onChange={(v) => setRevised({ ...revised, [f.id]: v })} />
+                <FieldView key={f.id} field={{ ...f, type: f.type === 'text' || f.type === 'chips' ? 'textarea' : f.type, required: false, defaultValue: undefined, mustChange: false, prefill: undefined }}
+                  value={f.type === 'table' ? parseTable(revised[f.id]) : revised[f.id] ?? ''} onChange={(v) => setRevised({ ...revised, [f.id]: v != null && typeof v === 'object' ? JSON.stringify(v) : v })} />
               ))}
             </div>
-            <button className="btn primary" style={{ marginTop: 10 }} onClick={saveRevised} disabled={busy === 'rev'}>{busy === 'rev' ? 'جارٍ الحفظ...' : 'حفظ النسخة المحسنة'}</button>
+            <button className="btn primary" style={{ marginTop: 10 }} onClick={saveRevised} disabled={busy === 'rev'}>{busy === 'rev' ? 'جارٍ الحفظ...' : 'حفظ النسخة المحسنة (تبقى الأصلية محفوظة)'}</button>
           </>
         )}
       </section>
@@ -191,12 +195,14 @@ function diffWords(a: string, b: string) {
   return out;
 }
 
-export function Compare({ fields, a, b }: { fields: { id: string; label: string }[]; a: Record<string, string>; b: Record<string, string> }) {
+export function Compare({ fields, a: ra, b: rb }: { fields: ProductFieldLike[] & { id: string; label: string }[]; a: Record<string, string>; b: Record<string, string> }) {
+  const a: Record<string, string> = {}, b: Record<string, string> = {};
+  for (const f of fields as any[]) { a[f.id] = productText(f, ra?.[f.id]); b[f.id] = productText(f, rb?.[f.id]); }
   return (
     <div className="compare">
       <div className="col">
-        <h4>النسخة الأولية</h4>
-        {fields.map((f) => <div key={f.id} className="cmp-field"><div className="lbl">{f.label}</div><div className="val">{a[f.id] || '—'}</div></div>)}
+        <h4>النسخة الأصلية</h4>
+        {fields.map((f) => <div key={f.id} className="cmp-field"><div className="lbl">{f.label}</div><div className="val" style={{ whiteSpace: 'pre-wrap' }}>{a[f.id] || '—'}</div></div>)}
       </div>
       <div className="col">
         <h4>النسخة المحسنة</h4>

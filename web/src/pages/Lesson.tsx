@@ -50,7 +50,10 @@ export function LessonPage({ lessonId, activityId }: { lessonId: string; activit
   if (!preview && statuses[current.id] === 'locked') current = firstOpen;
   const idx = acts.indexOf(current);
   const done = Object.values(statuses).filter((s) => s === 'completed').length;
-  const stageActs = acts.filter((a) => a.stage === current.stage);
+  const stageActs = acts.filter((a) => !a.homework && !current.homework && a.stage === current.stage);
+  const hw = acts.filter((a) => a.homework);
+  const hwTarget = hw.find((a) => statuses[a.id] !== 'completed' && statuses[a.id] !== 'locked') ?? hw[0];
+  const hwLocked = !preview && hw.length > 0 && hw.every((a) => statuses[a.id] === 'locked');
   const nav = (id: string) => go(`lesson/${lesson.id}/${id}`);
 
   return (
@@ -62,6 +65,17 @@ export function LessonPage({ lessonId, activityId }: { lessonId: string; activit
           <div>
             <div className="small muted">الدرس المقرر: {lesson.courseLesson.title} · {lesson.durationMinutes} دقيقة</div>
             <h1>الحصة {lesson.number}: {lesson.title}</h1>
+            {(lesson.overview || lesson.objectives?.length) && (
+              <details className="box lesson-about" style={{ margin: '8px 0' }}>
+                <summary><span><Icon name="book" size={16} /> عن الحصة: الفكرة العامة والأهداف{lesson.productLabel ? ` و${lesson.productLabel}` : ''}</span><Icon name="down" size={16} /></summary>
+                <div className="body">
+                  {lesson.overview && <><h4 style={{ marginTop: 0 }}>فكرة عامة عن الدرس</h4><p className="small">{lesson.overview}</p></>}
+                  {lesson.objectives?.length ? <><h4>الأهداف التعليمية</h4>{lesson.objectivesIntro && <p className="small" style={{ marginBottom: 4 }}>{lesson.objectivesIntro}</p>}<ol className="small">{lesson.objectives.map((o, i) => <li key={i}>{o}</li>)}</ol></> : null}
+                  {lesson.skillsText && <><h4>مهارات الكتابة</h4><p className="small">{lesson.skillsText}</p></>}
+                  {lesson.productLabel && lesson.finalOutput && <><h4>{lesson.productLabel}</h4><p className="small">{lesson.finalOutput}</p></>}
+                </div>
+              </details>
+            )}
             <div className="skill-pills" aria-label="المهارات المستهدفة">
               {lesson.skills.map((s) => <span key={s} className="skill-pill"><Icon name="star" size={13} style={{ verticalAlign: -2, color: 'var(--accent)' }} /> {cat.skills.find((x) => x.id === s)?.studentLabel}</span>)}
             </div>
@@ -76,13 +90,13 @@ export function LessonPage({ lessonId, activityId }: { lessonId: string; activit
 
         <nav className="stagebar" aria-label="خطوات الاستراتيجية">
           {cat.stages.map((s) => {
-            const sa = acts.filter((a) => a.stage === s.id);
+            const sa = acts.filter((a) => !a.homework && a.stage === s.id);
             const allDone = sa.length > 0 && sa.every((a) => statuses[a.id] === 'completed');
             const locked = !preview && sa.every((a) => statuses[a.id] === 'locked');
             const target = preview ? sa[0] : sa.find((a) => statuses[a.id] !== 'completed' && statuses[a.id] !== 'locked') ?? sa[0];
             return (
-              <button key={s.id} className={`stage ${current.stage === s.id ? 'current' : ''} ${allDone ? 'done' : ''} ${locked ? 'locked' : ''}`}
-                style={{ ['--c' as any]: STAGE_COLORS[s.id] }} disabled={locked || !target} aria-current={current.stage === s.id ? 'step' : undefined}
+              <button key={s.id} className={`stage ${current.stage === s.id && !current.homework ? 'current' : ''} ${allDone ? 'done' : ''} ${locked ? 'locked' : ''}`}
+                style={{ ['--c' as any]: STAGE_COLORS[s.id] }} disabled={locked || !target} aria-current={current.stage === s.id && !current.homework ? 'step' : undefined}
                 title={locked ? 'أكملي الخطوات السابقة أولًا' : s.studentHint} onClick={() => target && nav(target.id)}>
                 {allDone && <span className="tick"><Icon name="check" size={16} stroke={2.6} /></span>}
                 <span className="num">{s.id}</span>
@@ -90,6 +104,15 @@ export function LessonPage({ lessonId, activityId }: { lessonId: string; activit
               </button>
             );
           })}
+          {hw.length > 0 && (
+            <button className={`stage homework ${current.homework ? 'current' : ''} ${hw.every((a) => statuses[a.id] === 'completed') ? 'done' : ''} ${hwLocked ? 'locked' : ''}`}
+              style={{ ['--c' as any]: 'var(--accent)' }} disabled={hwLocked} aria-current={current.homework ? 'step' : undefined}
+              title={hwLocked ? 'يُتاح بعد إكمال المراحل السبع' : lesson.homeworkTitle} onClick={() => hwTarget && nav(hwTarget.id)}>
+              {!preview && hw.every((a) => statuses[a.id] === 'completed') && <span className="tick"><Icon name="check" size={16} stroke={2.6} /></span>}
+              <span className="num"><Icon name="home" size={15} /></span>
+              <span className="name">النشاط البيتي</span>
+            </button>
+          )}
         </nav>
 
         {stageActs.length > 1 && (

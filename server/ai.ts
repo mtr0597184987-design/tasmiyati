@@ -1,6 +1,7 @@
 // المساعد الذكي الموحد: يبني التعليمات تلقائيًا من بيانات الحصة والخطوة والنشاط، ويتصل بالنموذج عبر الخادم فقط.
 import type { Activity, AIConfiguration, Lesson, Field } from '../shared/types.ts';
 import { getSetting } from './db.ts';
+import { plannerText, productText as productTextOf } from '../shared/outline.ts';
 import { activityFields, indicatorText, loadContent, skillText } from './content.ts';
 
 export class AIError extends Error {
@@ -59,6 +60,9 @@ export function formatValue(f: Field, v: unknown): string {
   if (v == null || v === '') return '(فارغ)';
   switch (f.type) {
     case 'list': return (v as string[]).filter(Boolean).map((x, i) => `${i + 1}) ${x}`).join('؛ ');
+    case 'planner': return plannerText(v);
+    case 'multi': return (v as string[]).map((id) => { const o = (f.options ?? []).find((o) => (typeof o === 'string' ? o : o.id) === id); return typeof o === 'object' ? o.text : String(o ?? id); }).join('؛ ');
+    case 'select':
     case 'choice': {
       const o = (f.options ?? []).find((o) => typeof o !== 'string' && o.id === v);
       return typeof o === 'object' ? o.text : String(v);
@@ -103,6 +107,27 @@ export function buildSystemPrompt(lesson: Lesson, a: Activity, values: Record<st
     return '';
   }).filter(Boolean).join('\n\n');
 
+  // نصوص أنشطة المهمة كما تعرضها المنصة للطالبة (من الدليل)
+  const matText = (m: any): string => {
+    if (m.type === 'scenario' || m.type === 'task' || m.type === 'note') return `${m.title}: ${m.text}`;
+    if (m.type === 'examples') return `${m.title}: ${m.items.map((i: any) => `${i.label}. ${i.text}`).join(' | ')}`;
+    if (m.type === 'thinkAloud') return `${m.title}: ${m.steps.map((s: any) => `${s.title}: ${s.text}`).join(' | ')}`;
+    if (m.type === 'modelCard') return `${m.title}: ${m.rows.map((r: any) => `${r.label}: ${r.value}`).join('، ')}`;
+    if (m.type === 'criteria' && m.items) return `${m.title}: ${m.items.map((i: any) => i.text).join(' | ')}`;
+    return '';
+  };
+  const sectionsText = a.worksheet.sections.map((sec) => {
+    const parts = (sec.content ?? []).map((it) => {
+      if (it.type === 'p') return it.text;
+      if (it.type === 'table') return it.rows.map((r) => r.join(' | ')).join('\n');
+      if (it.type === 'material') return matText(it.material);
+      if (it.type === 'diagram') return `${it.title ?? 'مخطط نموذجي'}:\n${plannerText(it.value)}`;
+      return '';
+    }).filter(Boolean);
+    const fields = sec.fields.map((f) => `  • حقل: ${f.label}${(f.options ?? []).length ? ` (البدائل: ${(f.options ?? []).map((o) => (typeof o === 'string' ? o : o.text)).join('، ')})` : ''}`).join('\n');
+    return `### ${sec.number ? `نشاط (${sec.number}): ` : ''}${sec.title}\n${[sec.intro, ...parts].filter(Boolean).join('\n')}${fields ? '\n' + fields : ''}${sec.assist ? `\n  • زر «${sec.assist.label}»: ${sec.assist.message}` : ''}`;
+  }).join('\n\n');
+
   const questions = as.questions.map((q, i) => {
     let s = `${i + 1}. ${q.text}`;
     if (q.success) s += `\n   عند الإجابة المناسبة يمكنكِ قول: «${q.success}»`;
@@ -128,16 +153,19 @@ ${c.style}
 
 ## سياق النشاط الحالي
 - الحصة ${lesson.number}: ${lesson.title} (الدرس المقرر: ${lesson.courseLesson.title}).
-- النشاط (${a.id}): ${a.title}.
+- ${a.homework ? 'النشاط البيتي' : 'المهمة'} (${a.id}): ${a.title}.
 - خطوة الاستراتيجية: ${stage.id}. ${stage.name} — وظيفتها: ${stage.assistantFunction}
-- هدف النشاط: ${a.goal}
+${a.minutes ? `- زمن المهمة: ${a.minutes} دقائق.\n` : ''}${a.goal ? `- هدف النشاط: ${a.goal}` : ''}
 - المهارات المستهدفة: ${a.skills.map((s) => `(${s}) ${skillText(s)}`).join(' ')}
 - مؤشرات الدافعية التي يدعمها أسلوب تفاعلكِ (لا تسألي عنها مباشرة ولا تذكريها للطالبة): ${a.motivation.map(indicatorText).join('؛ ')}
-- المنتج المتوقع: ${a.expectedOutput}
+${a.expectedOutput ? `- المنتج المتوقع: ${a.expectedOutput}` : ''}
 - مستوى المساندة: ${support[as.supportLevel] ?? ''}
 
 ## المادة التعليمية المعروضة على الطالبة
 ${materials || '(لا توجد)'}
+
+## أنشطة المهمة كما تظهر للطالبة
+${sectionsText || '(لا توجد)'}
 
 ## الأسئلة المسموح بطرحها (بالترتيب، سؤالًا واحدًا في كل مرة)
 ${questions || '(لا توجد أسئلة محددة)'}
@@ -241,7 +269,7 @@ export function demoReply(a: Activity, studentTurns: number): string {
 export function feedbackPrompt(lesson: Lesson, a: Activity, product: Record<string, string>, self: Record<string, { level: string; note?: string }>): { system: string; user: string } {
   const rubric = lesson.rubric!;
   const levels = Object.fromEntries(rubric.levels.map((l) => [l.id, l.label]));
-  const productText = (lesson.productFields ?? []).map((f) => `- ${f.label}: ${product[f.id] || '(فارغ)'}`).join('\n');
+  const productText = (lesson.productFields ?? []).map((f) => `- ${f.label}: ${productTextOf(f, product[f.id]) || '(فارغ)'}`).join('\n');
   const selfText = rubric.criteria.map((c, i) => `${i + 1}. ${c.text} → تقويم الطالبة: ${levels[self[c.id]?.level] ?? 'لم تحدد'}${self[c.id]?.note ? ` (ملاحظتها: ${self[c.id].note})` : ''}`).join('\n');
   const system = buildSystemPrompt(lesson, a, {}, `## مهمتكِ الآن
 قدّمي ملاحظات تشخيصية على المنتج الأولي للطالبة وفق معايير التقويم. أعيدي الرد بصيغة JSON فقط، دون أي نص قبله أو بعده، وفق البنية:

@@ -21,11 +21,11 @@ export function ratingScale(): ScaleLevel[] {
 
 /** بنود السلم الافتراضية: معايير الحصة في الإنتاج المستقل والتقويم، ونص المهارات المعتمدة في بقية الأنشطة */
 export function defaultCriteria(lesson: Lesson, a: Activity): RatingCriterion[] {
-  if ((a.independent || a.stage === 7) && lesson.rubric?.criteria?.length) {
+  if ((a.independent || (a.stage === 7 && !a.homework)) && lesson.rubric?.criteria?.length) {
     return lesson.rubric.criteria.map((c) => ({ id: `r-${c.id}`, text: c.text }));
   }
   const list: RatingCriterion[] = (a.skills ?? []).map((n) => ({ id: `s${n}`, text: skillText(n) })).filter((c) => c.text);
-  list.push({ id: 'task', text: 'إنجاز مهمة النشاط واكتمالها ودقتها.' });
+  list.push({ id: 'task', text: 'إنجاز المهمة واكتمالها ودقتها.' });
   return list;
 }
 

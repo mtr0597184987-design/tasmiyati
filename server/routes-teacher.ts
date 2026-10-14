@@ -1,3 +1,4 @@
+import { productText } from '../shared/outline.ts';
 // واجهات لوحة المعلمة. كل المسارات هنا تتطلب صلاحية المعلمة.
 import { route, HttpError } from './http.ts';
 import { all, get, getSetting, parse, run, setSetting, tx } from './db.ts';
@@ -25,7 +26,7 @@ route('GET', '/api/teacher/overview', 'teacher', () => {
   const lessons = allLessons().filter((l) => l.activities.length);
   const students = all("SELECT id, code, label, real_name, group_name, free_navigation, created_at FROM users WHERE role = 'student' ORDER BY id");
   return {
-    lessons: lessons.map((l) => ({ id: l.id, number: l.number, title: l.title, activities: l.activities.map((a) => ({ id: a.id, title: a.title, stage: a.stage })) })),
+    lessons: lessons.map((l) => ({ id: l.id, number: l.number, title: l.title, activities: l.activities.map((a) => ({ id: a.id, title: a.title, stage: a.stage, homework: !!a.homework })) })),
     students: students.map((s) => {
       const perLesson = Object.fromEntries(lessons.map((l) => [l.id, activityStatuses(s.id, l)]));
       const pendingShares = get("SELECT COUNT(*) AS n FROM shares WHERE student_id = ? AND status = 'pending'", s.id)?.n ?? 0;
@@ -97,7 +98,7 @@ route('GET', '/api/teacher/students/:id', 'teacher', (c) => {
         const self = v.__self ?? null;
         delete v.__self;
         return {
-          id: a.id, title: a.title, stage: a.stage, status: st[a.id],
+          id: a.id, title: a.title, stage: a.stage, homework: !!a.homework, status: st[a.id],
           openedAt: prog.get(a.id)?.opened_at ?? null, completedAt: prog.get(a.id)?.completed_at ?? null,
           unlockedByTeacher: !!prog.get(a.id)?.unlocked_by_teacher,
           answers: activityFields(a).filter((f) => v[f.id] != null).map((f) => ({ id: f.id, label: f.label, value: formatValue(f, v[f.id]) })),
@@ -452,7 +453,7 @@ route('GET', '/api/teacher/export.csv', 'teacher', (c) => {
     for (const l2 of lessons) for (const ver of ['initial', 'revised'] as const) {
       const art = getArtifact(s.id, l2.id, ver);
       if (!art) continue;
-      for (const pf of l2.productFields ?? []) rows.push([s.code, s.label, s.group_name, l2.number, ver === 'initial' ? 'المنتج الأولي' : 'المنتج المحسن', '', '', '', '', pf.label, art.data[pf.id], ver === 'initial' ? art.meta.submittedAt : art.updated_at].map(csvCell).join(','));
+      for (const pf of l2.productFields ?? []) rows.push([s.code, s.label, s.group_name, l2.number, ver === 'initial' ? 'المنتج الأولي' : 'المنتج المحسن', '', '', '', '', pf.label, productText(pf, art.data[pf.id]), ver === 'initial' ? art.meta.submittedAt : art.updated_at].map(csvCell).join(','));
     }
   }
   c.res.writeHead(200, { 'content-type': 'text/csv; charset=utf-8', 'content-disposition': 'attachment; filename="tasmiyati-data.csv"' });

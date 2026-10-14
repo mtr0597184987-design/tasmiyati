@@ -65,7 +65,7 @@ function PortfolioBody({ d, teacherView }: { d: any; teacherView?: boolean }) {
                       {j.data ? <span className="badge">{j.version === 'revised' ? 'محسن' : 'أولي'}</span> : <span className="badge">لم يُنجز بعد</span>}
                     </span>
                   </summary>
-                  {j.data && <dl className="kv" style={{ marginTop: 8 }}>{j.fields.map((f: any) => <div key={f.id} style={{ display: 'contents' }}><dt>{f.label}</dt><dd><ProductValue type={f.type} value={j.data[f.id] ?? ''} /></dd></div>)}</dl>}
+                  {j.data && <dl className="kv" style={{ marginTop: 8 }}>{j.fields.map((f: any) => <div key={f.id} style={{ display: 'contents' }}><dt>{f.label}</dt><dd><ProductValue type={f.type} field={f} value={j.data[f.id] ?? ''} /></dd></div>)}</dl>}
                 </details>
               </li>
             ))}
@@ -109,7 +109,7 @@ function PortfolioBody({ d, teacherView }: { d: any; teacherView?: boolean }) {
           {l.product && (
             <>
               <h3 style={{ marginTop: 16 }}>منتجي الكتابي</h3>
-              <p className="small muted">النسخة الأولية: {fmtDate(l.product.initialAt)}{l.product.revisedAt ? ` · المحسنة: ${fmtDate(l.product.revisedAt)}` : ''}</p>
+              <p className="small muted">النسخة الأصلية: {fmtDate(l.product.initialAt)}{l.product.revisedAt ? ` · المحسنة: ${fmtDate(l.product.revisedAt)}` : ''}</p>
               <Compare fields={l.product.fields} a={l.product.initial} b={l.product.revised ?? l.product.initial} />
               {!l.product.revised && <p className="small muted">لم تُحفظ نسخة محسنة بعد.</p>}
             </>
