@@ -23,7 +23,7 @@ export function AssistantPanel({ activity, history, blocked, aiMode, stageIcon, 
   const [error, setError] = useState('');
   const box = useRef<HTMLDivElement>(null);
   const as = activity.assistant;
-  const color = STAGE_COLORS[activity.stage];
+  const color = activity.book ? 'var(--book)' : STAGE_COLORS[activity.stage];
 
   useEffect(() => { box.current?.scrollTo({ top: box.current.scrollHeight, behavior: 'smooth' }); }, [msgs, busy]);
   // على الجوال تكون اللوحة مخفية عند التحميل؛ فعند ظهورها ننزل إلى آخر رسالة
@@ -82,7 +82,7 @@ export function AssistantPanel({ activity, history, blocked, aiMode, stageIcon, 
             <>
               <p style={{ fontWeight: 600 }}>{as.opening}</p>
               <p>{as.lockMessage ?? 'ستنجزين هذه المهمة بنفسكِ.'}</p>
-              <p className="small muted">المساعدة التوليدية معطلة في هذه المرحلة، ولن يُرسل أي طلب إلى النموذج حتى تسلّمي إنتاجكِ.</p>
+              <p className="small muted">{activity.book?.test ? 'المساعدة التوليدية متوقفة في الاختبار؛ أجيبي بنفسكِ لتعرفي مستواكِ.' : 'المساعدة التوليدية معطلة في هذه المرحلة، ولن يُرسل أي طلب إلى النموذج حتى تسلّمي إنتاجكِ.'}</p>
             </>
           ) : (
             <>

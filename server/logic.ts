@@ -41,7 +41,7 @@ export function isFilled(f: Field | undefined, v: any): boolean {
     case 'planner': { const p = plannerStats(v); return !!p.mode && p.topic && p.ideas >= (f.min ?? 1) && p.minDetails >= (f.minDetails ?? 0); }
     case 'multi': return Array.isArray(v) && v.length >= (f.min ?? 1);
     case 'classify': return (f.items ?? []).every((it) => v?.[it.id]);
-    case 'table': { const t = parseTable(v); return (f.rows ?? []).filter((r) => !f.optionalRows?.includes(r.id)).every((r) => (f.columns ?? []).every((c) => String(t?.[r.id]?.[c.id] ?? '').trim())); }
+    case 'table': { const t = parseTable(v); return (f.rows ?? []).filter((r) => !f.optionalRows?.includes(r.id)).every((r) => (f.columns ?? []).every((c) => f.given?.[r.id]?.[c.id] != null || String(t?.[r.id]?.[c.id] ?? '').trim())); }
     case 'ordering': return Array.isArray(v) && v.length === (f.items?.length ?? 0);
     default: return String(v).trim().length > 0;
   }
@@ -172,6 +172,8 @@ export function activityStatuses(studentId: number, lesson: Lesson): Record<stri
   let prevDone = true;
   for (const a of lesson.activities) {
     const r = p.get(a.id);
+    // أنشطة كتاب الطالبة متاحة طوال الحصة، ولا تدخل في سلسلة الخطوات
+    if (a.book) { out[a.id] = r?.status === 'completed' ? 'completed' : r ? 'in_progress' : 'available'; continue; }
     if (r?.status === 'completed') out[a.id] = 'completed';
     else if (prevDone || free || r?.unlocked_by_teacher) out[a.id] = r ? 'in_progress' : 'available';
     else out[a.id] = 'locked';

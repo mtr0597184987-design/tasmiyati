@@ -26,7 +26,7 @@ route('GET', '/api/teacher/overview', 'teacher', () => {
   const lessons = allLessons().filter((l) => l.activities.length);
   const students = all("SELECT id, code, label, real_name, group_name, free_navigation, created_at FROM users WHERE role = 'student' ORDER BY id");
   return {
-    lessons: lessons.map((l) => ({ id: l.id, number: l.number, title: l.title, activities: l.activities.map((a) => ({ id: a.id, title: a.title, stage: a.stage, homework: !!a.homework })) })),
+    lessons: lessons.map((l) => ({ id: l.id, number: l.number, title: l.title, activities: l.activities.map((a) => ({ id: a.id, title: a.title, stage: a.stage, homework: !!a.homework, book: a.book ?? null })) })),
     students: students.map((s) => {
       const perLesson = Object.fromEntries(lessons.map((l) => [l.id, activityStatuses(s.id, l)]));
       const pendingShares = get("SELECT COUNT(*) AS n FROM shares WHERE student_id = ? AND status = 'pending'", s.id)?.n ?? 0;
@@ -98,7 +98,7 @@ route('GET', '/api/teacher/students/:id', 'teacher', (c) => {
         const self = v.__self ?? null;
         delete v.__self;
         return {
-          id: a.id, title: a.title, stage: a.stage, homework: !!a.homework, status: st[a.id],
+          id: a.id, title: a.title, stage: a.stage, homework: !!a.homework, book: a.book ?? null, status: st[a.id],
           openedAt: prog.get(a.id)?.opened_at ?? null, completedAt: prog.get(a.id)?.completed_at ?? null,
           unlockedByTeacher: !!prog.get(a.id)?.unlocked_by_teacher,
           answers: activityFields(a).filter((f) => v[f.id] != null).map((f) => ({ id: f.id, label: f.label, value: formatValue(f, v[f.id]) })),

@@ -14,7 +14,7 @@ export function portfolioData(studentId: number) {
 
   const lessons = allLessons().filter((l) => l.activities.length).map((l) => {
     const activities = l.activities.map((a) => ({
-      id: a.id, title: a.title, stage: a.stage,
+      id: a.id, title: a.title, stage: a.stage, book: !!a.book,
       status: pmap.get(a.id)?.status ?? 'not_started',
       completedAt: pmap.get(a.id)?.completed_at ?? null,
     }));
@@ -45,7 +45,7 @@ export function portfolioData(studentId: number) {
     const revised = getArtifact(studentId, l.id, 'revised');
     return {
       id: l.id, number: l.number, title: l.title,
-      completed: activities.every((a) => a.status === 'completed'),
+      completed: activities.filter((a) => !a.book).every((a) => a.status === 'completed'),
       activities, goals, reflections, planningCards, selfAssessment, feedback,
       product: initial ? {
         fields,
@@ -76,7 +76,7 @@ export function portfolioHtml(d: ReturnType<typeof portfolioData>): string {
     <article>
       <h2>الحصة ${l.number}: ${esc(l.title)} ${l.completed ? '<span class="tag">مكتملة</span>' : ''}</h2>
       <table><tr><th>النشاط</th><th>الحالة</th><th>تاريخ الإكمال</th></tr>
-      ${l.activities.map((a) => `<tr><td>(${a.id}) ${esc(a.title)}</td><td>${a.status === 'completed' ? 'مكتمل' : a.status === 'in_progress' ? 'قيد الإنجاز' : '—'}</td><td>${esc(a.completedAt ?? '')}</td></tr>`).join('')}</table>
+      ${l.activities.map((a) => `<tr><td>${a.book ? 'من كتاب الطالبة: ' : `(${a.id}) `}${esc(a.title)}</td><td>${a.status === 'completed' ? 'مكتمل' : a.status === 'in_progress' ? 'قيد الإنجاز' : '—'}</td><td>${esc(a.completedAt ?? '')}</td></tr>`).join('')}</table>
       ${l.goals.length ? `<h3>أهدافي الشخصية</h3><ul>${l.goals.map((g) => `<li>${esc(g)}</li>`).join('')}</ul>` : ''}
       ${l.planningCards.map((p) => `<h3>بطاقة التخطيط</h3><table>${p.rows.map((r) => `<tr><th>${esc(r.label)}</th><td>${esc(r.value)}</td></tr>`).join('')}</table>`).join('')}
       ${l.product ? `<h3>منتجي الكتابي: النسخة الأصلية والمحسنة</h3><table><tr><th></th><th>النسخة الأصلية</th><th>النسخة المحسنة</th></tr>

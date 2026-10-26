@@ -66,6 +66,7 @@ export interface Field {
   defaultValue?: string; // نص تبدأ منه الطالبة (مثل نص تدريبي تعدّله)
   mustChange?: boolean; // لا يُقبل الحقل إن بقي كما هو
   prefill?: { lesson: string; field: string }[]; // يُسترجع من منتجات الطالبة السابقة بطلبها
+  given?: Record<string, Record<string, string>>; // الجدول: خلايا معطاة في الكتاب (للقراءة فقط)
 }
 
 export interface Hint { level: number; kind: string; text: string }
@@ -80,6 +81,9 @@ export type SectionItem =
   | { type: 'table'; rows: string[][] }
   | { type: 'material'; material: Material }
   | { type: 'diagram'; title?: string; mode: PlannerMode; value: PlannerValue }
+  | { type: 'box'; title?: string; items: string[]; ordered?: boolean; tone?: 'read' | 'plain' } // إطار «اقرأ» أو قائمة نقاط من الكتاب
+  | { type: 'passage'; title?: string; text: string; source?: string } // نص قرائي منقول من الكتاب
+  | { type: 'image'; src: string; alt: string; caption?: string }
   | { type: 'fields' };
 
 export interface WorksheetSection {
@@ -128,6 +132,7 @@ export interface Activity {
   title: string;
   minutes?: number;
   homework?: boolean; // النشاط البيتي: بعد الخطوة السابعة وخارج ترتيبها
+  book?: { pages: string; part: string; test?: boolean; note?: string }; // من كتاب الطالبة: متاح طوال الحصة وخارج ترتيب الخطوات
   completeLabel?: string; // اسم زر الإكمال (مثل «اعتماد موضوعي»)
   submitLabel?: string; // اسم زر التسليم في الإنتاج المستقل (مثل «تسليم المهمة»)
   goal?: string;
@@ -171,6 +176,7 @@ export interface Lesson {
   productLabel?: string; // «المنتج الكتابي» أو «التطبيق الكتابي»
   homeworkTitle?: string;
   homeworkFollowup?: string[]; // متابعة المعلمة وتقويم النشاط البيتي
+  bookPages?: string; // صفحات كتاب الطالبة المرتبطة بالحصة
   productFields?: Field[]; // تُشتق تلقائيًا من حقول نشاط الإنتاج المستقل
   rubric?: Rubric;
   authoringNote?: string;

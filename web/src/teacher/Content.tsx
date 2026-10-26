@@ -55,8 +55,8 @@ export function Content() {
                 <tbody>
                   {l.activities.map((a: any) => (
                     <tr key={a.id}>
-                      <td>{a.homework ? 'النشاط البيتي: ' : `(${taskNo(a.id)}) `}{a.title}</td>
-                      <td className="small">{a.homework ? 'بيتي' : a.stage}</td>
+                      <td>{a.homework ? 'النشاط البيتي: ' : a.book ? `من الكتاب (ص ${a.book.pages}): ` : `(${taskNo(a.id)}) `}{a.title}</td>
+                      <td className="small">{a.homework ? 'بيتي' : a.book ? (a.book.test ? 'كتاب: اختبار' : 'كتاب') : a.stage}</td>
                       <td className="small">{a.assistant.name}{l.overridden.includes(a.id) && <span className="badge info" style={{ marginInlineStart: 4 }}>معدّل</span>}</td>
                       <td className="small">{a.skills.join('، ')}</td>
                       <td className="small ltr" style={{ textAlign: 'right' }}>{a.motivation.join(' ')}</td>

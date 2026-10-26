@@ -12,6 +12,8 @@
   --primary-2: #175855;
   --primary-soft: #e2efec;
   --accent: #b36a1c;
+  --book: #6d5aa6;
+  --book-soft: #f4f1fb;
   --accent-soft: #f8ecdb;
   --danger: #ad3e2c;
   --danger-soft: #f8e3de;
@@ -74,6 +76,8 @@
   --primary-2: #66c2ba;
   --primary-soft: #1d3634;
   --accent: #d9944a;
+  --book: #b6a5ea;
+  --book-soft: #252336;
   --accent-soft: #33281c;
   --danger: #e07b69;
   --danger-soft: #3a2320;
@@ -131,6 +135,8 @@
   --primary-2: #66c2ba;
   --primary-soft: #1d3634;
   --accent: #d9944a;
+  --book: #b6a5ea;
+  --book-soft: #252336;
   --accent-soft: #33281c;
   --danger: #e07b69;
   --danger-soft: #3a2320;
@@ -320,6 +326,7 @@ a.lesson-card:hover { border-color: var(--primary); }
 
 .stagebar { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); grid-auto-flow: column; gap: 6px; margin: 6px 0 18px; }
 .stage.homework { border-style: dashed; }
+.stage.book { border-style: dashed; }
 .stage {
   border: 1px solid var(--line); background: var(--surface); border-radius: 12px; padding: 8px 6px 9px; cursor: pointer; text-align: center;
   display: flex; flex-direction: column; align-items: center; gap: 3px; position: relative; min-height: 84px;
@@ -645,3 +652,19 @@ table.grid.match tr.wrong td { background: var(--accent-soft); }
 .pfish-bone.bottom::after { bottom: 100%; transform: skewX(25deg); }
 .pfish-idea { font-weight: 700; }
 .pfish-bone ul { margin: 4px 0 0; padding-inline-start: 16px; }
+
+/* محتوى كتاب الطالبة */
+.book-box { margin: 10px 0; padding: 12px 14px; border-radius: 12px; background: var(--book-soft); border-inline-start: 4px solid var(--book); }
+.book-box.plain { background: var(--surface-2); border-inline-start-color: var(--line); }
+.book-box-title { font-weight: 700; color: var(--book); margin-bottom: 6px; }
+.book-box ul, .book-box ol { margin: 0; padding-inline-start: 1.3em; }
+.book-box li { margin: 3px 0; line-height: 1.8; }
+.book-box li.sub { list-style: '– '; margin-inline-start: 1.2em; }
+.passage { margin: 10px 0; padding: 14px 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.passage-title { font-weight: 700; margin-bottom: 6px; text-align: center; color: var(--book); }
+.passage p { margin: 0 0 8px; line-height: 2; text-indent: 1.5em; }
+.passage-source { font-size: .85em; color: var(--muted); text-align: start; }
+.book-image { margin: 10px auto; text-align: center; }
+.book-image img { max-width: min(100%, 320px); border-radius: 8px; border: 1px solid var(--line); background: #fff; }
+.book-image figcaption { font-size: .85em; color: var(--muted); margin-top: 4px; }
+table.grid td.given { background: var(--surface-2); color: var(--ink); font-size: .95em; }

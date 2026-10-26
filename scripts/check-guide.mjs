@@ -17,7 +17,7 @@ for (const g of guide) {
   need(g.overview, 'الفكرة العامة');
   g.objectives.forEach((o, i) => need(o, `الهدف ${i + 1}`));
   for (const [k, v] of Object.entries(g.header)) if (['مهارات الكتابة', 'المنتج الكتابي', 'التطبيق الكتابي'].includes(k)) need(v, k);
-  const core = L.activities.filter((a) => !a.homework);
+  const core = L.activities.filter((a) => !a.homework && !a.book);
   g.tasks.forEach((t, i) => {
     const a = core[i];
     if (!a || a.id !== t.id || a.stage !== t.stage || a.minutes !== t.minutes || a.title !== t.title) { missing++; report.push(`✗ ${t.id}: الترتيب أو المرحلة أو الزمن أو العنوان لا يطابق الدليل`); }

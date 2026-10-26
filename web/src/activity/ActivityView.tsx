@@ -31,7 +31,7 @@ export function ActivityView({ lesson, activity: a, catalog, status, preview, po
 }) {
   const { me, aiMode, toast, online } = useApp();
   const stage = catalog.stages.find((s) => s.id === a.stage)!;
-  const color = STAGE_COLORS[a.stage];
+  const color = a.book ? 'var(--book)' : STAGE_COLORS[a.stage];
   const [data, setData] = useState<any>(null);
   const [error, setError] = useState('');
   const [values, setValues] = useState<Record<string, any>>({});
@@ -144,7 +144,7 @@ export function ActivityView({ lesson, activity: a, catalog, status, preview, po
     try {
       if (!(await save())) { toast('تعذّر حفظ إجاباتكِ على الخادم. هي محفوظة على هذا الجهاز؛ حاولي مرة أخرى عند عودة الاتصال.', 'error'); return; }
       await api(`/api/activities/${a.id}/complete`, { body: {} });
-      toast(`${a.homework ? 'أنجزتِ النشاط البيتي، وحُفظ عملكِ.' : STAGE_PRAISE[a.stage]} (أنجزتِ ${position.done + (status === 'completed' ? 0 : 1)} من ${position.total} في هذه الحصة)`, 'ok');
+      toast(`${a.homework ? 'أنجزتِ النشاط البيتي، وحُفظ عملكِ.' : a.book ? 'أحسنتِ؛ أنجزتِ أنشطة هذا الجزء من الكتاب، وحُفظ عملكِ.' : STAGE_PRAISE[a.stage]} (أنجزتِ ${position.done + (status === 'completed' ? 0 : 1)} من ${position.total} ${a.book ? 'من أجزاء الكتاب في هذه الحصة' : 'في هذه الحصة'})`, 'ok');
       await onCompleted();
       if (nextId) onNavigate(nextId);
     } catch (e: any) {
@@ -189,7 +189,7 @@ export function ActivityView({ lesson, activity: a, catalog, status, preview, po
     <div className="pane-work">
       <div className="card">
         <header className="activity-header" style={{ ['--c' as any]: color }}>
-          <div className="eyebrow">{a.homework ? <>النشاط البيتي{lesson.homeworkTitle ? `: ${lesson.homeworkTitle}` : ''}</> : <>المرحلة {ORD[stage.id]}: {stage.name} · المهمة ({taskNo(a.id)}){a.minutes ? ` · ${a.minutes} ${a.minutes > 10 ? 'دقيقة' : 'دقائق'}` : ''}</>}</div>
+          <div className="eyebrow">{a.book ? <>من كتاب الطالبة · {a.book.part} · ص {a.book.pages}</> : a.homework ? <>النشاط البيتي{lesson.homeworkTitle ? `: ${lesson.homeworkTitle}` : ''}</> : <>المرحلة {ORD[stage.id]}: {stage.name} · المهمة ({taskNo(a.id)}){a.minutes ? ` · ${a.minutes} ${a.minutes > 10 ? 'دقيقة' : 'دقائق'}` : ''}</>}</div>
           <h2>{a.title}</h2>
           {a.goal && <div className="goal"><b>هدف المهمة: </b>{a.goal}</div>}
           <div className="skill-pills">
@@ -199,9 +199,9 @@ export function ActivityView({ lesson, activity: a, catalog, status, preview, po
         </header>
 
         <details className="box" style={{ marginBottom: 14 }}>
-          <summary><span><Icon name="list" size={16} /> {a.homework ? 'ماذا سأفعل في النشاط البيتي؟' : 'ماذا سأفعل في هذه المهمة؟'}</span><Icon name="down" size={16} /></summary>
+          <summary><span><Icon name="list" size={16} /> {a.homework ? 'ماذا سأفعل في النشاط البيتي؟' : a.book ? 'ماذا سأفعل هنا؟' : 'ماذا سأفعل في هذه المهمة؟'}</span><Icon name="down" size={16} /></summary>
           <div className="body">
-            {a.studentProcedures.length > 0 && <><h4 style={{ marginTop: 0 }}>{a.homework ? 'خطواتي في النشاط البيتي' : 'إجراءات التنفيذ المرتبطة بالطالبة'}</h4><ol style={{ margin: 0 }}>{a.studentProcedures.map((p, i) => <li key={i}>{p}</li>)}</ol></>}
+            {a.studentProcedures.length > 0 && <><h4 style={{ marginTop: 0 }}>{a.homework ? 'خطواتي في النشاط البيتي' : a.book ? 'خطواتي' : 'إجراءات التنفيذ المرتبطة بالطالبة'}</h4><ol style={{ margin: 0 }}>{a.studentProcedures.map((p, i) => <li key={i}>{p}</li>)}</ol></>}
             {a.teacherProcedures && (
               <>
                 <h4 style={{ marginTop: 12 }}>{a.homework ? 'متابعة المعلمة وتقويم النشاط البيتي' : 'إجراءات التنفيذ المرتبطة بالمعلمة'}</h4>
@@ -241,7 +241,7 @@ export function ActivityView({ lesson, activity: a, catalog, status, preview, po
                 <Alert kind="info" icon="pen">هذه مساحة الإنتاج المستقل: اكتبي بنفسكِ، فالمساعد الذكي وأدوات توليد النصوص معطلة. تُحفظ مسودتكِ تلقائيًا، ولا يُعتمد إنتاجكِ إلا عند الضغط على «{submitLabel}».</Alert>
               )}
               <div className="row between" style={{ marginTop: 14 }}>
-                <h3 style={{ margin: 0 }}><Icon name="edit" size={18} style={{ verticalAlign: -3 }} /> {a.independent ? 'إنتاجي المستقل' : a.homework ? 'النشاط البيتي' : 'أنشطة المهمة'}</h3>
+                <h3 style={{ margin: 0 }}><Icon name="edit" size={18} style={{ verticalAlign: -3 }} /> {a.independent ? 'إنتاجي المستقل' : a.homework ? 'النشاط البيتي' : a.book ? (a.book.test ? 'أسئلة الاختبار' : 'أنشطة الكتاب') : 'أنشطة المهمة'}</h3>
                 {hasPrefill && !preview && <button className="btn sm" onClick={applyPrefill} disabled={!products}><Icon name="folder" size={16} /> استرجاع من منتجاتي السابقة</button>}
               </div>
               <Worksheet {...wsProps} sections={a.worksheet.sections}
@@ -309,7 +309,7 @@ export function ActivityView({ lesson, activity: a, catalog, status, preview, po
 }
 
 function aiOff(data: any, aiMode: string, a: Activity): string | undefined {
-  if (a.assistant.mode === 'disabled') return 'المساعد معطل في الإنتاج المستقل.';
+  if (a.assistant.mode === 'disabled') return a.book?.test ? 'المساعد متوقف في الاختبار.' : 'المساعد معطل في الإنتاج المستقل.';
   if (data?.chatBlocked) return 'المساعد متوقف حتى تسلّمي إنتاجكِ المستقل في هذه الحصة.';
   if ((data?.ai?.mode ?? aiMode) === 'off') return 'المساعد معطل من إعدادات المعلمة.';
   return undefined;

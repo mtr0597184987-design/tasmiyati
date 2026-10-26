@@ -41,6 +41,7 @@ export function Worksheet({ activityId, sections, values, onChange, checks, hint
               return (
                 <div key={f.id}>
                   <FieldView field={f} value={values[f.id]} onChange={(v) => onChange(f.id, v)} check={ch} readOnly={readOnly} onPaste={onPaste} />
+                  {f.help && !readOnly && <span className="field-help" style={{ display: 'block', marginTop: 4 }}>{f.help}</span>}
                   {preview && f.answerKey != null && <div className="tiny" style={{ marginTop: 6, color: 'var(--primary-2)' }}><b>الإجابة المعتمدة (للمعلمة): </b>{answerText(f)}</div>}
                   {canCheck && onCheck && !readOnly && (
                     <button type="button" className="btn sm" style={{ marginTop: 8 }} onClick={() => onCheck(f.id)}><Icon name="check" size={16} /> {f.checkLabel ?? 'تحقق من إجابتي'}</button>
@@ -105,6 +106,25 @@ function SectionItemView({ item: it, activityId, fields, isRevealed, preview }: 
       return <div style={{ margin: '10px 0' }}><Materials items={[m]} activityId={`${activityId}:${m.title}`} preview={preview} /></div>;
     }
     case 'diagram': return <div className="diagram-box">{it.title && <div className="small" style={{ fontWeight: 700, marginBottom: 6 }}>{it.title}</div>}<PlannerView value={{ ...it.value, mode: it.mode }} /></div>;
+    case 'box': {
+      const L = it.ordered ? 'ol' : 'ul';
+      return (
+        <div className={`book-box ${it.tone === 'plain' ? 'plain' : ''}`}>
+          {it.title && <div className="book-box-title">{it.title}</div>}
+          <L>{it.items.map((x, i) => x.startsWith('– ') ? <li key={i} className="sub">{x.slice(2)}</li> : <li key={i}>{x}</li>)}</L>
+        </div>
+      );
+    }
+    case 'passage':
+      return (
+        <figure className="passage">
+          {it.title && <figcaption className="passage-title">{it.title}</figcaption>}
+          {it.text.split(/\n+/).map((para, i) => <p key={i}>{para}</p>)}
+          {it.source && <div className="passage-source">{it.source}</div>}
+        </figure>
+      );
+    case 'image':
+      return <figure className="book-image"><img src={it.src} alt={it.alt} />{it.caption && <figcaption>{it.caption}</figcaption>}</figure>;
     case 'fields': return <>{fields}</>;
     default: return null;
   }
@@ -269,6 +289,8 @@ export function FieldView({ field: f, value: rawValue, onChange, check, readOnly
                   <tr key={r.id}>
                     <th scope="row">{r.label}</th>
                     {(f.columns ?? []).map((c) => {
+                      const given = f.given?.[r.id]?.[c.id];
+                      if (given != null) return <td key={c.id} className="given" style={{ whiteSpace: 'pre-line' }}>{given}</td>;
                       const opts = r.options ?? c.options;
                       const set = (x: string) => onChange({ ...v, [r.id]: { ...(v[r.id] ?? {}), [c.id]: x } });
                       return (

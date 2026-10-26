@@ -158,5 +158,6 @@ export function PreviewBar() {
 export function taskNo(id: string): string {
   const [l, t] = String(id).split('-');
   if (t === 'H') return 'البيتي';
+  if (t?.startsWith('K')) return `الكتاب ${t.slice(1)}`;
   return t ? `${l}\u200F-\u200F${t}` : String(id);
 }

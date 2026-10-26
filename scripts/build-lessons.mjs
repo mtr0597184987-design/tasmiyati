@@ -160,6 +160,48 @@ function rubricFrom(g, spec) {
   };
 }
 
+// ---------- كتاب الطالبة ----------
+const book = (await import(pathToFileURL(path.join(root, 'content/source/book.mjs')).href + `?t=${Date.now()}`)).default;
+const BOOK_CONSTRAINTS = [
+  'هذه أنشطة كتاب الطالبة المقرر؛ لا تجيبي عنها ولا تكتبي نصًا بديلًا عن الطالبة، بل وضّحي المطلوب واسألي سؤالًا واحدًا يقود تفكيرها.',
+  'عند فحص إجابة الطالبة: ابدئي بما أحسنت فيه، ثم حددي موضعًا واحدًا يحتاج إلى مراجعة وعلّلي، واطرحي سؤالًا يوجّه التحسين.',
+  'الكتاب يخاطب المتعلم، والطالبة أنثى؛ خاطبيها بصيغة المؤنث.',
+];
+function mediaSrc(src) {
+  if (!src.startsWith('book-media/')) return src;
+  const f = path.join(root, 'content/source', src);
+  return `data:image/${f.endsWith('.png') ? 'png' : 'jpeg'};base64,${fs.readFileSync(f).toString('base64')}`;
+}
+function bookActivities(lesson, n) {
+  return (book[lesson.id] ?? []).map((b) => {
+    const sections = b.sections.map((s, i) => {
+      const content = (s.content ?? []).map((it) => (it.type === 'image' ? { ...it, src: mediaSrc(it.src) } : it));
+      const sec = { id: `b${i + 1}`, title: s.title, content, fields: s.fields ?? [] };
+      if (s.number) sec.number = s.number;
+      if (s.assist && !b.test) sec.assist = { label: s.assist, message: CHECK_MSG };
+      return sec;
+    });
+    const fields = sections.flatMap((s) => s.fields);
+    const pages = String(b.pages);
+    return {
+      id: `${n}-${b.key}`, stage: b.test ? 6 : 5, title: b.title,
+      book: { pages, part: b.part, ...(b.test ? { test: true } : {}) },
+      skills: b.skills ?? lesson.skills,
+      motivation: b.test ? ['C9', 'A6'] : ['C5', 'A4', 'R1'],
+      studentProcedures: b.steps ?? (b.test ? BOOK_TEST_STEPS : BOOK_STEPS),
+      materials: [],
+      assistant: b.test
+        ? { name: 'المساعد في الاختبار', mode: 'disabled', supportLevel: 'none', opening: b.opening, questions: [], constraints: ['المساعد متوقف في اختبارات الكتاب؛ تجيب الطالبة بنفسها.'], lockMessage: 'هذا اختبار من كتابكِ؛ أجيبي بنفسكِ لتعرفي مستواكِ، ثم ناقشي إجاباتكِ مع معلمتكِ.' }
+        : { name: 'رفيقة الكتاب', mode: 'dialogue', supportLevel: 'medium', opening: b.opening, questions: [], constraints: BOOK_CONSTRAINTS },
+      worksheet: { sections },
+      completeLabel: b.test ? 'إنهاء الاختبار' : 'إكمال هذا الجزء من الكتاب',
+      requirements: { fields: fields.filter((f) => f.required).map((f) => f.id) },
+    };
+  });
+}
+const BOOK_STEPS = ['اقرئي نص كل نشاط من الكتاب كاملًا قبل أن تجيبي.', 'أجيبي بنفسكِ في الخانات تحت كل نشاط، وعودي إلى مراجعكِ حين يطلب النشاط ذلك.', 'استعيني بزر «راجعي إجابتي معي» تحت النشاط ليحاوركِ المساعد في إجابتكِ دون أن يجيب عنكِ.', 'اضغطي «إكمال» بعد أن تنجزي أنشطة هذا الجزء؛ تُحفظ إجاباتكِ في ملف إنجازكِ.'];
+const BOOK_TEST_STEPS = ['هذا اختبار: أجيبي عن كل سؤال بنفسكِ لتعرفي مستواكِ، فالمساعد متوقف هنا.', 'اقرئي السؤال جيدًا، وخططي لإجابتكِ قبل الكتابة.', 'راجعي إجاباتكِ، ثم اضغطي «إكمال».', 'تطّلع معلمتكِ على إجاباتكِ وتقدّرها.'];
+
 const only = process.argv[2];
 for (const g of guide) {
   const id = `L0${g.number}`;
@@ -169,7 +211,9 @@ for (const g of guide) {
   const spec = (await import(pathToFileURL(specPath).href + `?t=${Date.now()}`)).default;
   const lesson = lessonMeta(g, spec);
   lesson.rubric = rubricFrom(g, spec);
-  lesson.activities = [...g.tasks.map((t) => buildActivity(lesson, g, t, spec, false)), ...(g.homework ? [buildActivity(lesson, g, null, spec, true)] : [])];
+  lesson.activities = [...g.tasks.map((t) => buildActivity(lesson, g, t, spec, false)), ...(g.homework ? [buildActivity(lesson, g, null, spec, true)] : []), ...bookActivities(lesson, g.number)];
+  const bk = lesson.activities.filter((a) => a.book);
+  if (bk.length) lesson.bookPages = bk.map((a) => a.book.pages).join('، ');
   fs.writeFileSync(path.join(root, `content/lessons/lesson-0${g.number}.json`), JSON.stringify(lesson, null, 1) + '\n');
   console.log(`✓ ${id}: ${lesson.title} — ${lesson.activities.length} نشاطًا`);
 }

@@ -92,7 +92,7 @@ function PortfolioBody({ d, teacherView }: { d: any; teacherView?: boolean }) {
             <table className="grid">
               <thead><tr><th>النشاط</th><th>الحالة</th><th>تاريخ الإكمال</th></tr></thead>
               <tbody>{l.activities.map((a: any) => (
-                <tr key={a.id}><td>({a.id}) {a.title}</td><td>{a.status === 'completed' ? <span className="badge ok">مكتمل</span> : a.status === 'in_progress' ? <span className="badge warn">قيد الإنجاز</span> : <span className="muted">—</span>}</td><td className="small">{fmtDate(a.completedAt)}</td></tr>
+                <tr key={a.id}><td>{a.book ? 'من كتاب الطالبة: ' : `(${a.id}) `}{a.title}</td><td>{a.status === 'completed' ? <span className="badge ok">مكتمل</span> : a.status === 'in_progress' ? <span className="badge warn">قيد الإنجاز</span> : <span className="muted">—</span>}</td><td className="small">{fmtDate(a.completedAt)}</td></tr>
               ))}</tbody>
             </table>
           </div>

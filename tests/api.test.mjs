@@ -91,12 +91,13 @@ test('نسخة الطالبة لا تتضمن مفاتيح الإجابة ولا
   assert.ok(!raw.includes('أحسنتِ. هذا موضوع محدد ينطلق من المشكلة')); // تغذية راجعة لبديل
   assert.ok(!raw.includes('ولا تقترحي عليها موضوعًا بديلًا')); // تعليمات زر المساعد
   assert.ok(raw.includes('"checkable":true'));
-  assert.equal(Object.keys(r.data.statuses).length, 8); // سبع مهمات ونشاط بيتي
+  assert.equal(Object.keys(r.data.statuses).length, 12); // سبع مهمات ونشاط بيتي وأربعة أجزاء من كتاب الطالبة
+  for (const k of ['1-K1', '1-K2', '1-K3', '1-K4']) assert.equal(r.data.statuses[k], 'available', 'أنشطة الكتاب متاحة طوال الحصة');
   assert.equal(r.data.statuses['1-1'], 'available');
   assert.equal(r.data.statuses['1-2'], 'locked');
   const l = r.data.lesson;
   assert.equal(l.title, 'اختيار موضوع الكتابة وتحديد الهدف');
-  assert.deepEqual(l.activities.map((a) => a.minutes ?? null), [4, 6, 5, 5, 9, 11, 5, null]);
+  assert.deepEqual(l.activities.filter((a) => !a.book).map((a) => a.minutes ?? null), [4, 6, 5, 5, 9, 11, 5, null]);
   assert.ok(l.activities[7].homework);
   assert.equal(l.activities[0].worksheet.sections[0].title, 'ساعدي سارة على اتخاذ القرار');
   assert.equal(l.objectives.length, 6);
@@ -106,6 +107,25 @@ test('نسخة الطالبة لا تتضمن مفاتيح الإجابة ولا
 test('الحصة غير المتاحة مغلقة أمام الطالبة', async () => {
   assert.equal((await s1.get('/api/lessons/L02')).status, 403);
 });
+
+test('أنشطة كتاب الطالبة: متاحة دون ترتيب، والمساعد متوقف في الاختبارات، والإكمال بالمتطلبات', async () => {
+  const k3 = await s1.get('/api/activities/1-K3');
+  assert.equal(k3.status, 200);
+  assert.equal(k3.data.chatBlocked, 'independent');
+  assert.equal((await s1.post('/api/activities/1-K3/chat', { message: 'ساعديني' })).status, 423);
+  assert.equal((await s1.post('/api/activities/1-K1/complete')).status, 400, 'المتطلبات أولًا');
+  await s1.put('/api/activities/1-K1/responses', { values: { unitHope: 'أن أنظم أفكاري قبل الكتابة' } });
+  assert.equal((await s1.post('/api/activities/1-K1/complete')).status, 200);
+  // خلايا الجدول المعطاة في الكتاب لا تُطلب من الطالبة
+  await s1.put('/api/activities/1-K4/responses', { values: { genreFit: { r3: { c1: 'قصة' }, r4: { c1: 'مقال' }, r5: { c1: 'رسالة' } } } });
+  const st = (await s1.get('/api/lessons/L01')).data.statuses;
+  assert.equal(st['1-K1'], 'completed');
+  const lesson = (await s1.get('/api/lessons/L01')).data.lesson;
+  const k4 = lesson.activities.find((a) => a.id === '1-K4');
+  assert.equal(k4.book.pages, '155–157');
+  assert.ok(!JSON.stringify(lesson).includes('answerKey'));
+});
+
 
 test('ضبط الانتقال، والفحص الموضوعي بتغذية راجعة لكل بديل', async () => {
   assert.equal((await s1.get('/api/activities/1-2')).status, 403);

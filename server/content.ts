@@ -146,9 +146,11 @@ export function validateContent(): { errors: string[]; warnings: string[] } {
   for (const l of c.lessons) {
     for (const s of [...l.skills, ...l.reinforcedSkills, ...(l.integratedSkills ?? [])]) if (!skillIds.has(s)) errors.push(`${l.id}: مهارة غير معتمدة ${s}`);
     if (l.status !== 'authored') { warnings.push(`${l.id}: مسودة (لم يُعدّ محتواها بعد).`); continue; }
-    const core = l.activities.filter((a) => !a.homework);
+    const core = l.activities.filter((a) => !a.homework && !a.book);
     const firstHw = l.activities.findIndex((a) => a.homework);
-    if (firstHw >= 0 && l.activities.slice(firstHw).some((a) => !a.homework)) errors.push(`${l.id}: النشاط البيتي يجب أن يأتي بعد الخطوات السبع.`);
+    if (firstHw >= 0 && l.activities.slice(firstHw).some((a) => !a.homework && !a.book)) errors.push(`${l.id}: النشاط البيتي يجب أن يأتي بعد الخطوات السبع.`);
+    const firstBook = l.activities.findIndex((a) => a.book);
+    if (firstBook >= 0 && l.activities.slice(firstBook).some((a) => !a.book)) errors.push(`${l.id}: أنشطة كتاب الطالبة تأتي بعد الخطوات السبع والنشاط البيتي.`);
     const stages = core.map((a) => a.stage);
     for (let s = 1; s <= 7; s++) if (!stages.includes(s as any)) errors.push(`${l.id}: الخطوة ${s} غير موجودة.`);
     for (let i = 1; i < stages.length; i++) if (stages[i] < stages[i - 1]) errors.push(`${l.id}: ترتيب الخطوات مخالف عند النشاط ${core[i].id}.`);
@@ -157,7 +159,7 @@ export function validateContent(): { errors: string[]; warnings: string[] } {
       if (seen.has(a.id)) errors.push(`معرف نشاط مكرر ${a.id}`);
       seen.add(a.id);
       if (!a.title) errors.push(`${a.id}: العنوان فارغ.`);
-      if (!a.homework && !a.studentProcedures?.length) errors.push(`${a.id}: إجراءات الطالبة فارغة.`);
+      if (!a.homework && !a.book && !a.studentProcedures?.length) errors.push(`${a.id}: إجراءات الطالبة فارغة.`);
       if (!a.assistant?.name || !a.assistant.opening) errors.push(`${a.id}: تعليمات المساعد ناقصة.`);
       for (const s of a.skills) if (!l.skills.includes(s) && !l.reinforcedSkills.includes(s) && !(l.integratedSkills ?? []).includes(s)) errors.push(`${a.id}: المهارة ${s} ليست من مهارات الحصة.`);
       for (const m of a.motivation) if (!indicatorIds.has(m)) errors.push(`${a.id}: مؤشر دافعية غير معتمد ${m}.`);
@@ -165,8 +167,8 @@ export function validateContent(): { errors: string[]; warnings: string[] } {
       if (fids.size !== activityFields(a).length) errors.push(`${a.id}: معرف حقل مكرر.`);
       for (const f of activityFields(a)) if (f.answerKey != null && !['choice', 'select', 'multi', 'classify', 'ordering', 'table'].includes(f.type)) errors.push(`${a.id}/${f.id}: مفتاح إجابة لنوع لا يُفحص.`);
       for (const r of a.requirements.fields) if (!fids.has(r)) errors.push(`${a.id}: متطلب لحقل غير موجود ${r}.`);
-      if (!a.homework && a.stage === 6 && (!a.independent || a.assistant.mode !== 'disabled')) errors.push(`${a.id}: خطوة الإنتاج المستقل يجب أن تعطّل المساعد التوليدي.`);
-      if (!a.homework && a.stage === 7 && !a.evaluation) errors.push(`${a.id}: خطوة التقويم يجب أن تحدد المنتج المستقل المصدر.`);
+      if (!a.homework && !a.book && a.stage === 6 && (!a.independent || a.assistant.mode !== 'disabled')) errors.push(`${a.id}: خطوة الإنتاج المستقل يجب أن تعطّل المساعد التوليدي.`);
+      if (!a.homework && !a.book && a.stage === 7 && !a.evaluation) errors.push(`${a.id}: خطوة التقويم يجب أن تحدد المنتج المستقل المصدر.`);
       for (const p of a.showProducts ?? []) if (!c.lessons.some((x) => x.id === p && x.number < l.number) && p !== l.id) errors.push(`${a.id}: منتج غير معروف أو لاحق ${p}.`);
       for (const f of activityFields(a)) for (const p of f.prefill ?? []) if (!(a.homework && p.lesson === l.id) && !c.lessons.some((x) => x.id === p.lesson && x.number < l.number)) errors.push(`${a.id}/${f.id}: استرجاع من حصة غير سابقة ${p.lesson}.`);
     }

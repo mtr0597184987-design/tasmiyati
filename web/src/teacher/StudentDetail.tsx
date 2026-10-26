@@ -91,7 +91,7 @@ export function StudentDetail({ id }: { id: string }) {
             {l.activities.map((a: any) => (
               <details key={a.id} className="box">
                 <summary>
-                  <span>{a.homework ? 'النشاط البيتي: ' : `(${taskNo(a.id)}) `}{a.title}</span>
+                  <span>{a.homework ? 'النشاط البيتي: ' : a.book ? `من الكتاب (ص ${a.book.pages}): ` : `(${taskNo(a.id)}) `}{a.title}</span>
                   <span className="row" style={{ gap: 6 }}>
                     {a.unlockedByTeacher && <span className="badge info">فتحته المعلمة</span>}
                     <span className={`badge ${ST[a.status][1]}`}>{ST[a.status][0]}</span>

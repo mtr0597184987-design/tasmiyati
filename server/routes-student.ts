@@ -48,12 +48,12 @@ route('GET', '/api/catalog', 'any', (c) => {
   const content = loadContent();
   const lessons = allLessons().map((l) => {
     const enabled = l.status === 'authored' && lessonEnabled(l.id);
-    let progress = { done: 0, total: l.activities.length, current: null as null | { id: string; title: string; stage: number } };
+    let progress = { done: 0, total: l.activities.filter((a) => !a.book).length, current: null as null | { id: string; title: string; stage: number; homework?: boolean; book?: boolean } };
     if (c.user!.role === 'student' && l.activities.length) {
       const st = activityStatuses(c.user!.id, l);
-      progress.done = Object.values(st).filter((s) => s === 'completed').length;
-      const cur = l.activities.find((a) => st[a.id] !== 'completed' && st[a.id] !== 'locked');
-      if (cur) progress.current = { id: cur.id, title: cur.title, stage: cur.stage, homework: !!cur.homework };
+      progress.done = l.activities.filter((a) => !a.book && st[a.id] === 'completed').length;
+      const cur = l.activities.find((a) => !a.book && st[a.id] !== 'completed' && st[a.id] !== 'locked') ?? l.activities.find((a) => st[a.id] !== 'completed' && st[a.id] !== 'locked');
+      if (cur) progress.current = { id: cur.id, title: cur.title, stage: cur.stage, homework: !!cur.homework, book: !!cur.book };
     }
     return {
       id: l.id, number: l.number, title: l.title, status: l.status, enabled, courseLesson: l.courseLesson,
@@ -177,7 +177,7 @@ route('POST', '/api/activities/:id/chat', 'student', async (c) => {
   const { lesson, activity: a } = ctxActivity(c);
   const sid = c.user!.id;
   // منع برمجي: لا توليد في الإنتاج المستقل، ولا في أي نشاط من الحصة أثناء الإنتاج المستقل
-  if (a.assistant.mode === 'disabled') throw new HttpError(423, 'المساعد التوليدي معطل في مرحلة الإنتاج المستقل. أنجزي المهمة بنفسكِ.');
+  if (a.assistant.mode === 'disabled') throw new HttpError(423, a.book?.test ? 'المساعد متوقف في الاختبار. أجيبي بنفسكِ.' : 'المساعد التوليدي معطل في مرحلة الإنتاج المستقل. أنجزي المهمة بنفسكِ.');
   const lockedBy = independentInProgress(sid, lesson);
   if (lockedBy) throw new HttpError(423, 'المساعد التوليدي معطل حتى تسلّمي إنتاجكِ المستقل في نشاط «' + lockedBy.title + '».');
   const message = String(c.body?.message ?? '').trim().slice(0, 1500);

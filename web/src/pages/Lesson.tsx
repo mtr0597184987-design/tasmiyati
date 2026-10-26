@@ -49,9 +49,13 @@ export function LessonPage({ lessonId, activityId }: { lessonId: string; activit
   let current = acts.find((a) => a.id === activityId) ?? (preview ? acts[0] : firstOpen);
   if (!preview && statuses[current.id] === 'locked') current = firstOpen;
   const idx = acts.indexOf(current);
-  const done = Object.values(statuses).filter((s) => s === 'completed').length;
-  const stageActs = acts.filter((a) => !a.homework && !current.homework && a.stage === current.stage);
+  const coreActs = acts.filter((a) => !a.book); // التقدم في الحصة: الخطوات السبع والنشاط البيتي
+  const done = coreActs.filter((a) => statuses[a.id] === 'completed').length;
+  const book = acts.filter((a) => a.book);
+  const stageActs = current.book ? book : acts.filter((a) => !a.homework && !a.book && !current.homework && a.stage === current.stage);
   const hw = acts.filter((a) => a.homework);
+  const bookTarget = book.find((a) => statuses[a.id] !== 'completed') ?? book[0];
+  const isStage = (id: number) => current.stage === id && !current.homework && !current.book;
   const hwTarget = hw.find((a) => statuses[a.id] !== 'completed' && statuses[a.id] !== 'locked') ?? hw[0];
   const hwLocked = !preview && hw.length > 0 && hw.every((a) => statuses[a.id] === 'locked');
   const nav = (id: string) => go(`lesson/${lesson.id}/${id}`);
@@ -67,12 +71,13 @@ export function LessonPage({ lessonId, activityId }: { lessonId: string; activit
             <h1>الحصة {lesson.number}: {lesson.title}</h1>
             {(lesson.overview || lesson.objectives?.length) && (
               <details className="box lesson-about" style={{ margin: '8px 0' }}>
-                <summary><span><Icon name="book" size={16} /> عن الحصة: الفكرة العامة والأهداف{lesson.productLabel ? ` و${lesson.productLabel}` : ''}</span><Icon name="down" size={16} /></summary>
+                <summary><span><Icon name="book" size={16} /> عن الحصة: الفكرة العامة والأهداف{lesson.productLabel ? ` و${lesson.productLabel}` : ''}{book.length ? ' وصفحات الكتاب' : ''}</span><Icon name="down" size={16} /></summary>
                 <div className="body">
                   {lesson.overview && <><h4 style={{ marginTop: 0 }}>فكرة عامة عن الدرس</h4><p className="small">{lesson.overview}</p></>}
                   {lesson.objectives?.length ? <><h4>الأهداف التعليمية</h4>{lesson.objectivesIntro && <p className="small" style={{ marginBottom: 4 }}>{lesson.objectivesIntro}</p>}<ol className="small">{lesson.objectives.map((o, i) => <li key={i}>{o}</li>)}</ol></> : null}
                   {lesson.skillsText && <><h4>مهارات الكتابة</h4><p className="small">{lesson.skillsText}</p></>}
                   {lesson.productLabel && lesson.finalOutput && <><h4>{lesson.productLabel}</h4><p className="small">{lesson.finalOutput}</p></>}
+                  {book.length > 0 && <><h4>من كتاب الطالبة</h4><p className="small">الوحدة التدريبية الرابعة «مهارات الكتابة»، الصفحات المرتبطة بهذه الحصة: {bookPages(book)}. تجدين نصوصها وأنشطتها في «من كتاب الطالبة» آخر شريط المراحل، وهي متاحة في أي وقت.</p></>}
                 </div>
               </details>
             )}
@@ -82,21 +87,21 @@ export function LessonPage({ lessonId, activityId }: { lessonId: string; activit
           </div>
           {!preview && (
             <div style={{ minWidth: 220 }}>
-              <div className="small muted" style={{ marginBottom: 4 }}>تقدمكِ في الحصة: {done} من {acts.length}</div>
-              <Progress value={done} total={acts.length} label="تقدمكِ في الحصة" />
+              <div className="small muted" style={{ marginBottom: 4 }}>تقدمكِ في الحصة: {done} من {coreActs.length}{book.length ? ` · الكتاب: ${book.filter((a) => statuses[a.id] === 'completed').length} من ${book.length}` : ''}</div>
+              <Progress value={done} total={coreActs.length} label="تقدمكِ في الحصة" />
             </div>
           )}
         </div>
 
         <nav className="stagebar" aria-label="خطوات الاستراتيجية">
           {cat.stages.map((s) => {
-            const sa = acts.filter((a) => !a.homework && a.stage === s.id);
+            const sa = acts.filter((a) => !a.homework && !a.book && a.stage === s.id);
             const allDone = sa.length > 0 && sa.every((a) => statuses[a.id] === 'completed');
             const locked = !preview && sa.every((a) => statuses[a.id] === 'locked');
             const target = preview ? sa[0] : sa.find((a) => statuses[a.id] !== 'completed' && statuses[a.id] !== 'locked') ?? sa[0];
             return (
-              <button key={s.id} className={`stage ${current.stage === s.id && !current.homework ? 'current' : ''} ${allDone ? 'done' : ''} ${locked ? 'locked' : ''}`}
-                style={{ ['--c' as any]: STAGE_COLORS[s.id] }} disabled={locked || !target} aria-current={current.stage === s.id && !current.homework ? 'step' : undefined}
+              <button key={s.id} className={`stage ${isStage(s.id) ? 'current' : ''} ${allDone ? 'done' : ''} ${locked ? 'locked' : ''}`}
+                style={{ ['--c' as any]: STAGE_COLORS[s.id] }} disabled={locked || !target} aria-current={isStage(s.id) ? 'step' : undefined}
                 title={locked ? 'أكملي الخطوات السابقة أولًا' : s.studentHint} onClick={() => target && nav(target.id)}>
                 {allDone && <span className="tick"><Icon name="check" size={16} stroke={2.6} /></span>}
                 <span className="num">{s.id}</span>
@@ -113,14 +118,23 @@ export function LessonPage({ lessonId, activityId }: { lessonId: string; activit
               <span className="name">النشاط البيتي</span>
             </button>
           )}
+          {book.length > 0 && (
+            <button className={`stage book ${current.book ? 'current' : ''} ${!preview && book.every((a) => statuses[a.id] === 'completed') ? 'done' : ''}`}
+              style={{ ['--c' as any]: 'var(--book, #7a5ea8)' }} aria-current={current.book ? 'step' : undefined}
+              title={`أنشطة كتاب الطالبة المرتبطة بهذه الحصة (ص ${bookPages(book)})، متاحة في أي وقت`} onClick={() => bookTarget && nav(bookTarget.id)}>
+              {!preview && book.every((a) => statuses[a.id] === 'completed') && <span className="tick"><Icon name="check" size={16} stroke={2.6} /></span>}
+              <span className="num"><Icon name="book" size={15} /></span>
+              <span className="name">من كتاب الطالبة</span>
+            </button>
+          )}
         </nav>
 
-        {stageActs.length > 1 && (
+        {(stageActs.length > 1 || current.book) && (
           <div className="activity-tabs" role="tablist" aria-label="أنشطة الخطوة">
             {stageActs.map((a) => (
               <button key={a.id} className="activity-tab" role="tab" aria-current={a.id === current.id} disabled={!preview && statuses[a.id] === 'locked'} onClick={() => nav(a.id)}>
                 {statuses[a.id] === 'completed' ? <Icon name="check" size={15} /> : statuses[a.id] === 'locked' ? <Icon name="lock" size={14} /> : null}
-                ({taskNo(a.id)}) {a.title}
+                {a.book ? <>ص {a.book.pages}: </> : <>({taskNo(a.id)}) </>}{a.title}
               </button>
             ))}
           </div>
@@ -129,11 +143,19 @@ export function LessonPage({ lessonId, activityId }: { lessonId: string; activit
         <ActivityView
           key={current.id}
           lesson={lesson} activity={current} catalog={cat} status={statuses[current.id] ?? 'available'} preview={preview}
-          position={{ index: idx, total: acts.length, done }}
+          position={current.book ? { index: book.indexOf(current), total: book.length, done: book.filter((a) => statuses[a.id] === 'completed').length } : { index: idx, total: coreActs.length, done }}
           onCompleted={refreshStatuses}
           prevId={acts[idx - 1]?.id} nextId={acts[idx + 1]?.id} onNavigate={nav}
         />
       </main>
     </>
   );
+}
+
+/** نطاق صفحات الكتاب لأنشطة الحصة */
+function bookPages(book: { book?: { pages: string } }[]): string {
+  const nums = book.flatMap((a) => (a.book?.pages ?? '').split(/[–-]/).map((x) => parseInt(x, 10))).filter((n) => !isNaN(n));
+  if (!nums.length) return '';
+  const lo = Math.min(...nums), hi = Math.max(...nums);
+  return lo === hi ? String(lo) : `${lo}–${hi}`;
 }
