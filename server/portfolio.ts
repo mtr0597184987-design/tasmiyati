@@ -45,7 +45,7 @@ export function portfolioData(studentId: number) {
     const revised = getArtifact(studentId, l.id, 'revised');
     return {
       id: l.id, number: l.number, title: l.title,
-      completed: activities.filter((a) => !a.book).every((a) => a.status === 'completed'),
+      completed: activities.every((a) => a.status === 'completed'),
       activities, goals, reflections, planningCards, selfAssessment, feedback,
       product: initial ? {
         fields,

@@ -163,11 +163,9 @@ export function validateContent(): { errors: string[]; warnings: string[] } {
   for (const l of c.lessons) {
     for (const s of [...l.skills, ...l.reinforcedSkills, ...(l.integratedSkills ?? [])]) if (!skillIds.has(s)) errors.push(`${l.id}: مهارة غير معتمدة ${s}`);
     if (l.status !== 'authored') { warnings.push(`${l.id}: مسودة (لم يُعدّ محتواها بعد).`); continue; }
-    const core = l.activities.filter((a) => !a.homework && !a.book);
+    const core = l.activities.filter((a) => !a.homework);
     const firstHw = l.activities.findIndex((a) => a.homework);
-    if (firstHw >= 0 && l.activities.slice(firstHw).some((a) => !a.homework && !a.book)) errors.push(`${l.id}: النشاط المنزلي يجب أن يأتي بعد الخطوات السبع.`);
-    const firstBook = l.activities.findIndex((a) => a.book);
-    if (firstBook >= 0 && l.activities.slice(firstBook).some((a) => !a.book)) errors.push(`${l.id}: أنشطة كتاب الطالبة تأتي بعد الخطوات السبع والنشاط المنزلي.`);
+    if (firstHw >= 0 && l.activities.slice(firstHw).some((a) => !a.homework)) errors.push(`${l.id}: النشاط المنزلي يجب أن يأتي بعد الخطوات السبع.`);
     const stages = core.map((a) => a.stage);
     for (let s = 1; s <= 7; s++) if (!stages.includes(s as any)) errors.push(`${l.id}: الخطوة ${s} غير موجودة.`);
     for (let i = 1; i < stages.length; i++) if (stages[i] < stages[i - 1]) errors.push(`${l.id}: ترتيب الخطوات مخالف عند النشاط ${core[i].id}.`);

@@ -144,7 +144,7 @@ export function ActivityView({ lesson, activity: a, catalog, status, preview, po
     try {
       if (!(await save())) { toast('تعذّر حفظ إجاباتكِ على الخادم. هي محفوظة على هذا الجهاز؛ حاولي مرة أخرى عند عودة الاتصال.', 'error'); return; }
       await api(`/api/activities/${a.id}/complete`, { body: {} });
-      toast(`${a.homework ? 'أنجزتِ النشاط المنزلي، وحُفظ عملكِ.' : a.book ? 'أحسنتِ؛ أنجزتِ أنشطة هذا الجزء من الكتاب، وحُفظ عملكِ.' : STAGE_PRAISE[a.stage]} (أنجزتِ ${position.done + (status === 'completed' ? 0 : 1)} من ${position.total} ${a.book ? (lesson.kind === 'book' ? 'في هذا القسم' : 'من أجزاء الكتاب في هذه الحصة') : 'في هذه الحصة'})`, 'ok');
+      toast(`${a.homework ? 'أنجزتِ النشاط المنزلي، وحُفظ عملكِ.' : a.book ? `أحسنتِ؛ أنجزتِ صفحات الكتاب (${a.book.pages}) في هذه المرحلة.` : STAGE_PRAISE[a.stage]} (أنجزتِ ${position.done + (status === 'completed' ? 0 : 1)} من ${position.total} في هذه الحصة)`, 'ok');
       await onCompleted();
       if (nextId) onNavigate(nextId);
     } catch (e: any) {
@@ -189,7 +189,7 @@ export function ActivityView({ lesson, activity: a, catalog, status, preview, po
     <div className="pane-work">
       <div className="card">
         <header className="activity-header" style={{ ['--c' as any]: color }}>
-          <div className="eyebrow">{a.book ? <>من كتاب الطالبة · {a.book.part} · ص {a.book.pages}</> : a.homework ? <>النشاط المنزلي{lesson.homeworkTitle ? `: ${lesson.homeworkTitle}` : ''}</> : <>المرحلة {ORD[stage.id]}: {stage.name} · المهمة ({taskNo(a.id)}){a.minutes ? ` · ${a.minutes} ${a.minutes > 10 ? 'دقيقة' : 'دقائق'}` : ''}</>}</div>
+          <div className="eyebrow">{a.book && lesson.kind === 'book' ? <>من كتاب الطالبة · {a.book.part} · ص {a.book.pages}</> : a.book && a.homework ? <>النشاط المنزلي · من كتاب الطالبة · ص {a.book.pages}</> : a.book ? <>المرحلة {ORD[stage.id]}: {stage.name} · من كتاب الطالبة: {a.book.part} · ص {a.book.pages}</> : a.homework ? <>النشاط المنزلي{lesson.homeworkTitle ? `: ${lesson.homeworkTitle}` : ''}</> : <>المرحلة {ORD[stage.id]}: {stage.name} · المهمة ({taskNo(a.id)}){a.minutes ? ` · ${a.minutes} ${a.minutes > 10 ? 'دقيقة' : 'دقائق'}` : ''}</>}</div>
           <h2>{a.title}</h2>
           {a.goal && <div className="goal"><b>هدف المهمة: </b>{a.goal}</div>}
           <div className="skill-pills">
@@ -241,7 +241,7 @@ export function ActivityView({ lesson, activity: a, catalog, status, preview, po
                 <Alert kind="info" icon="pen">هذه مساحة الإنتاج المستقل: اكتبي بنفسكِ، فالمساعد الذكي وأدوات توليد النصوص معطلة. تُحفظ مسودتكِ تلقائيًا، ولا يُعتمد إنتاجكِ إلا عند الضغط على «{submitLabel}».</Alert>
               )}
               <div className="row between" style={{ marginTop: 14 }}>
-                <h3 style={{ margin: 0 }}><Icon name="edit" size={18} style={{ verticalAlign: -3 }} /> {a.independent ? 'إنتاجي المستقل' : a.homework ? 'النشاط المنزلي' : a.book ? (a.book.test ? 'أسئلة الاختبار' : 'أنشطة الكتاب') : 'أنشطة المهمة'}</h3>
+                <h3 style={{ margin: 0 }}><Icon name="edit" size={18} style={{ verticalAlign: -3 }} /> {a.independent ? 'إنتاجي المستقل' : a.book ? (a.book.test ? 'أسئلة الاختبار' : 'أنشطة الكتاب') : a.homework ? 'النشاط المنزلي' : 'أنشطة المهمة'}</h3>
                 {hasPrefill && !preview && <button className="btn sm" onClick={applyPrefill} disabled={!products}><Icon name="folder" size={16} /> استرجاع من منتجاتي السابقة</button>}
               </div>
               <Worksheet {...wsProps} sections={a.worksheet.sections}

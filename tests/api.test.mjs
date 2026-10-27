@@ -91,14 +91,15 @@ test('نسخة الطالبة لا تتضمن مفاتيح الإجابة ولا
   assert.ok(!raw.includes('أحسنتِ. هذا موضوع محدد ينطلق من المشكلة')); // تغذية راجعة لبديل
   assert.ok(!raw.includes('ولا تقترحي عليها موضوعًا بديلًا')); // تعليمات زر المساعد
   assert.ok(raw.includes('"checkable":true'));
-  assert.equal(Object.keys(r.data.statuses).length, 8); // سبع مهمات ونشاط منزلي؛ أنشطة الكتاب العامة خارج الحصص
-  assert.equal(r.data.statuses['1-1'], 'available');
-  assert.equal(r.data.statuses['1-2'], 'locked');
+  assert.equal(Object.keys(r.data.statuses).length, 12); // سبع مهمات ونشاط منزلي وأربعة أجزاء من الكتاب داخل المراحل
+  assert.equal(r.data.statuses['1-K1'], 'available', 'الحصة الأولى تبدأ بدليل الوحدة من الكتاب');
+  assert.equal(r.data.statuses['1-1'], 'locked');
   const l = r.data.lesson;
   assert.equal(l.title, 'اختيار موضوع الكتابة وتحديد الهدف');
   assert.deepEqual(l.activities.filter((a) => !a.book).map((a) => a.minutes ?? null), [4, 6, 5, 5, 9, 11, 5, null]);
-  assert.ok(l.activities[7].homework);
-  assert.equal(l.activities[0].worksheet.sections[0].title, 'ساعدي سارة على اتخاذ القرار');
+  assert.deepEqual(l.activities.map((a) => a.id), ['1-K1', '1-K3', '1-1', '1-2', '1-K2', '1-3', '1-4', '1-5', '1-K4', '1-6', '1-7', '1-H']);
+  assert.ok(l.activities[11].homework);
+  assert.equal(l.activities[2].worksheet.sections[0].title, 'ساعدي سارة على اتخاذ القرار');
   assert.equal(l.objectives.length, 6);
   assert.equal(l.rubric.levels.map((x) => x.label).join('|'), 'متحقق|يحتاج إلى تحسين');
 });
@@ -107,29 +108,51 @@ test('الحصة غير المتاحة مغلقة أمام الطالبة', asyn
   assert.equal((await s1.get('/api/lessons/L02')).status, 403);
 });
 
-test('أقسام كتاب الطالبة خارج الحصص: متاحة دون إتاحة، والمساعد متوقف في الاختبارات، والإكمال بالمتطلبات', async () => {
-  const cat = (await s1.get('/api/catalog')).data;
-  assert.deepEqual(cat.sections.map((x) => x.id), ['UI', 'UD1', 'UD3', 'UO']);
-  assert.ok(cat.sections.every((x) => x.enabled));
-  assert.equal(cat.lessons.length, 9);
-  const l7 = (await s1.get('/api/lessons/UI')).data;
-  assert.equal(l7.lesson.kind, 'book');
-  for (const k of ['UI-K1', 'UI-K2', 'UI-K3']) assert.equal(l7.statuses[k], 'available');
-  const k3 = await s1.get('/api/activities/UI-K3');
+const BOOK_VALUES = {
+  '1-K1': { unitHope: 'أن أنظم أفكاري قبل الكتابة' },
+  '1-K3': {
+    fishPre: JSON.stringify({ mode: 'fishbone', topic: 'سبل حفظ النعمة', ideas: [{ element: '', idea: 'النعمة', details: ['شكرها'], method: '' }, { element: '', idea: 'الهدر', details: ['أسبابه'], method: '' }, { element: '', idea: 'الحلول', details: ['التخطيط'], method: '' }] }),
+    titlesPre: { r1: { c1: 'قصص نابغين' }, r2: { c1: 'أخطاء خطيرة' }, r3: { c1: 'مغامرة' } },
+    introPre: 'نحرص على حفظ الطعام.', reorgPre: 'فقرة أعدتُ تنظيمها.',
+  },
+  '1-K2': {
+    genres: { r2: { c1: 'الشخصيات والأحداث' }, r3: { c1: 'التاريخ والتحية' }, r4: { c1: 'المقدمة والنتائج' } }, prevUnits: 'علامات الترقيم',
+    headings: Array.from({ length: 10 }, (_, i) => `s${i + 1}`), headingsWhy: 'بحسب الفن', srcTopics: { r1: { c1: 'أ' }, r2: { c1: 'ب' }, r3: { c1: 'ج' }, r4: { c1: 'د' }, r5: { c1: 'هـ' } },
+  },
+  '1-K4': {
+    genreFit: { r3: { c1: 'قصة' }, r4: { c1: 'مقال' }, r5: { c1: 'رسالة' } },
+    peerPrefs: Object.fromEntries(['r1', 'r2', 'r3', 'r4', 'r5'].map((r) => [r, { c1: '3', c2: 'المدرسة' }])), peerPrefsShow: 'المقال أولًا',
+    goals: Object.fromEntries(['r1', 'r2', 'r3', 'r4', 'r5'].map((r) => [r, { c1: 'الإقناع' }])),
+  },
+  '2-K1': {
+    club: { r3: { c1: 'الإدارة', c2: 'الهيكل', c3: 'السجلات' }, r4: { c1: 'المالية', c2: 'الدخل', c3: 'المحاسب' } },
+    bestSrc: { r1: { c1: 'الأخبار' }, r2: { c1: 'السكان' }, r3: { c1: 'الإحصاءات' } },
+    canteenInfo: ['النظافة', 'الأسعار', 'الازدحام', 'الأصناف'], canteenHeads: ['النظافة', 'الأسعار', 'الازدحام'],
+    canteenReport: Array.from({ length: 110 }, () => 'كلمة').join(' '), canteenSources: 'المقابلات والملاحظة',
+  },
+};
+async function doBook(c, id) {
+  await c.put(`/api/activities/${id}/responses`, { values: BOOK_VALUES[id] });
+  const r = await c.post(`/api/activities/${id}/complete`);
+  assert.equal(r.status, 200, `${id}: ${JSON.stringify(r.data)}`);
+}
+
+test('أجزاء كتاب الطالبة مهمات داخل مراحل الحصة: بالترتيب، والمساعد متوقف في الاختبار، والخلايا المعطاة لا تُطلب', async () => {
+  const l1 = (await s1.get('/api/lessons/L01')).data;
+  const k = l1.lesson.activities.find((a) => a.id === '1-K1');
+  assert.equal(k.stage, 1);
+  assert.equal(k.book.pages, '147–149');
+  assert.equal(l1.statuses['1-K3'], 'locked', 'الاختبار القبلي بعد دليل الوحدة');
+  assert.equal((await s1.post('/api/activities/1-K1/complete')).status, 400, 'المتطلبات أولًا');
+  await doBook(s1, '1-K1');
+  const k3 = await s1.get('/api/activities/1-K3');
   assert.equal(k3.status, 200);
   assert.equal(k3.data.chatBlocked, 'independent');
-  assert.equal((await s1.post('/api/activities/UI-K3/chat', { message: 'ساعديني' })).status, 423);
-  assert.equal((await s1.post('/api/activities/UI-K1/complete')).status, 400, 'المتطلبات أولًا');
-  await s1.put('/api/activities/UI-K1/responses', { values: { unitHope: 'أن أنظم أفكاري قبل الكتابة' } });
-  assert.equal((await s1.post('/api/activities/UI-K1/complete')).status, 200);
-  // خلايا الجدول المعطاة في الكتاب لا تُطلب من الطالبة
-  await s1.put('/api/activities/UD1-K1/responses', { values: { genreFit: { r3: { c1: 'قصة' }, r4: { c1: 'مقال' }, r5: { c1: 'رسالة' } } } });
-  const st = (await s1.get('/api/lessons/UI')).data.statuses;
-  assert.equal(st['UI-K1'], 'completed');
-  const lesson = (await s1.get('/api/lessons/UD1')).data.lesson;
-  const k4 = lesson.activities.find((a) => a.id === 'UD1-K1');
-  assert.equal(k4.book.pages, '155–157');
-  assert.ok(!JSON.stringify(lesson).includes('answerKey'));
+  assert.equal((await s1.post('/api/activities/1-K3/chat', { message: 'ساعديني' })).status, 423);
+  await doBook(s1, '1-K3');
+  const st = (await s1.get('/api/lessons/L01')).data.statuses;
+  assert.equal(st['1-1'], 'available', 'ثم مهمة الدليل في مرحلة التحفيز');
+  assert.ok(!JSON.stringify(l1.lesson).includes('answerKey'));
 });
 
 
@@ -149,6 +172,7 @@ test('ضبط الانتقال، والفحص الموضوعي بتغذية را�
 });
 
 test('الوضع التجريبي يعرض الأسئلة بالتتابع ويُوسم بأنه غير متصل بالنموذج', async () => {
+  await doBook(s2, '1-K1'); await doBook(s2, '1-K3');
   const r1 = await s2.post('/api/activities/1-1/chat', { message: 'نعم مستعدة' });
   assert.equal(r1.status, 200);
   assert.equal(r1.data.mode, 'demo');
@@ -164,6 +188,8 @@ test('المطابقة بالقوائم لا تُفحص قبل اكتمالها�
   assert.deepEqual(r.data.checks.genreMatch.detail, [true, false, true, true]);
   await s1.put('/api/activities/1-2/responses', { values: { genreMatch: { i1: 'k4', i2: 'k2', i3: 'k3', i4: 'k1' }, goal: 'تشجيع الزميلات على القراءة', audience: 'أ', style: 'نعم' } });
   assert.equal((await s1.post('/api/activities/1-2/complete')).status, 200);
+  assert.equal((await s1.get('/api/activities/1-3')).status, 403, 'نشاطات الكتاب التمهيدية في مرحلة الاستكشاف أولًا');
+  await doBook(s1, '1-K2');
   await s1.put('/api/activities/1-3/responses', { values: { relation: 'كل عنصر يحدد ما بعده', better: 'o2', reason: 'أدق' } });
   assert.equal((await s1.post('/api/activities/1-3/complete')).status, 200);
   await s1.put('/api/activities/1-4/responses', { values: { domain: 'الحياة المدرسية', topic: 'الرياضة', topicReviewed: 'الرياضة' } });
@@ -173,6 +199,7 @@ test('المطابقة بالقوائم لا تُفحص قبل اكتمالها�
   assert.equal((await s1.post('/api/activities/1-5/complete')).status, 400, 'خلية الفن التعبيري فارغة');
   await s1.put('/api/activities/1-5/responses', { values: { card: { r1: { c1: 'البيئة' }, r2: { c1: 'الهدر' }, r3: { c1: 'التوعية' }, r4: { c1: 'الطالبات' }, r5: { c1: 'المقال' } } } });
   assert.equal((await s1.post('/api/activities/1-5/complete')).status, 200);
+  await doBook(s1, '1-K4');
 });
 
 test('أزرار المساعد المسماة في الدليل ترسل تعليمتها إلى سياق المساعد دون أن تظهر للطالبة', async () => {
@@ -200,7 +227,7 @@ test('الإنتاج المستقل: منع برمجي للتوليد، وحفظ
 });
 
 test('التقويم والتحسين بمستويين: التقويم الذاتي أولًا، ثم الملاحظات، ثم النسخة المحسنة مع الاحتفاظ بالأصلية', async () => {
-  const ev = (await s1.get('/api/lessons/L01')).data.lesson.activities[6];
+  const ev = (await s1.get('/api/lessons/L01')).data.lesson.activities.find((a) => a.id === '1-7');
   assert.equal(ev.evaluation.analyzeLabel, 'تحليل بطاقة موضوعي');
   assert.equal((await s1.post('/api/activities/1-7/feedback')).status, 400, 'لا ملاحظات قبل التقويم الذاتي');
   assert.equal((await s1.put('/api/activities/1-7/revised', { values: { topic: 'x' } })).status, 400);
@@ -270,7 +297,7 @@ test('لوحة المعلمة: المتابعة، والفتح الاستثنا�
 test('المعلمة تعدّل تعليمات المساعد والمعايير دون تعديل الشيفرة', async () => {
   assert.equal((await teacher.put('/api/teacher/activities/1-1/assistant', { name: 'رفيقتي في الكتابة', extraInstructions: 'استخدمي أمثلة من المدرسة.' })).status, 200);
   const l = await s2.get('/api/lessons/L01');
-  assert.equal(l.data.lesson.activities[0].assistant.name, 'رفيقتي في الكتابة');
+  assert.equal(l.data.lesson.activities.find((a) => a.id === '1-1').assistant.name, 'رفيقتي في الكتابة');
   await teacher.req('DELETE', '/api/teacher/activities/1-1/assistant');
   assert.equal((await teacher.put('/api/teacher/lessons/L01/rubric', { criteria: [{ id: 'c1', text: 'معيار معدل' }] })).status, 200);
   const r = await teacher.get('/api/teacher/content');
@@ -381,6 +408,7 @@ test('الحصة الثانية: البناء على منتج الحصة الأ�
   assert.equal((await s1.post('/api/activities/2-4/complete')).status, 200);
   await s1.put('/api/activities/2-5/responses', { values: { picked: ['m1', 'm2', 'm4'], usable: ['m1', 'm2', 'm3'], whyVerify: 'الدقة', peerIdea: 'التركيز', peerInfo: 'دراسة', peerVerify: 'o2', peerGave: 'مثال', organized: { r1: row('أ', 'ب', 'ج'), r2: row('أ', 'ب', 'ج'), r3: row('أ', 'ب', 'ج') } } });
   assert.equal((await s1.post('/api/activities/2-5/complete')).status, 200);
+  await doBook(s1, '2-K1');
   const bank = { r1: { c1: 'التركيز', c2: 'انتباه أطول', c3: 'هدوء', c4: 'ملاحظة' }, r2: { c1: 'النشاط', c2: 'حيوية', c3: 'نوم', c4: 'تحتاج تحقق' } };
   assert.equal((await s1.post('/api/activities/2-6/submit', { values: { bank, importance: 'مهمة' } })).status, 400, 'الفكرة الثالثة ناقصة');
   bank.r3 = { c1: 'المزاج', c2: 'هدوء', c3: 'رضا', c4: 'كتاب' };
@@ -466,7 +494,7 @@ test('سلالم التقدير: بنود من المهارات المعتمدة
   await teacher.put('/api/teacher/settings', { scale: null });
   // يظهر في صفحة الطالبة والتصدير، ولا يصل إلى الطالبة
   const det = await teacher.get(`/api/teacher/students/${sid}`);
-  assert.equal(det.data.lessons[0].activities[0].rating.values[c1.id], 4);
+  assert.equal(det.data.lessons[0].activities.find((a) => a.id === '1-1').rating.values[c1.id], 4);
   const csv = String((await teacher.get('/api/teacher/export-ratings.csv')).data);
   assert.ok(csv.includes('ممتاز') && csv.includes('تحتاج دعمًا في الهدف'));
   assert.ok(!JSON.stringify((await s1.get('/api/activities/1-1')).data).includes('تحتاج دعمًا في الهدف'));
@@ -484,7 +512,7 @@ test('التصفير: يتطلب كلمة المرور والتأكيد، ويُ
   const o = await teacher.get('/api/teacher/overview');
   assert.equal(o.data.students.length, before);
   assert.ok(o.data.students.every((s) => Object.values(s.progress.L01).every((x) => x !== 'completed')));
-  assert.equal((await s1.get('/api/activities/1-1')).status, 200); // الطالبة ما زالت تستطيع الدخول
+  assert.equal((await s1.get('/api/activities/1-K1')).status, 200); // الطالبة ما زالت تستطيع الدخول
   assert.equal(String((await teacher.get('/api/teacher/export-ratings.csv')).data).split('\r\n').length, 1);
   assert.equal((await teacher.post('/api/teacher/reset', { mode: 'all', password: 'test-pass-123', confirm: 'تصفير' })).status, 200);
   assert.equal((await teacher.get('/api/teacher/overview')).data.students.length, 0);
@@ -500,7 +528,7 @@ test('التقارير: صورة الصف وتقرير الطالبة من تق�
   const [a, b] = made.map((m) => ov.find((s) => s.code === m.code).id);
   const st = new Client();
   await st.post('/api/auth/student', { code: made[0].code });
-  await st.post('/api/activities/1-1/open'); // تفتح النشاط
+  await st.post('/api/activities/1-K1/open'); // تفتح النشاط
   const crit = (await teacher.get('/api/teacher/ratings/1-1')).data.criteria;
   await teacher.put(`/api/teacher/students/${a}/ratings`, { activityId: '1-1', values: { [crit[0].id]: 4, [crit[1].id]: 4 } });
   await teacher.put(`/api/teacher/students/${b}/ratings`, { activityId: '1-1', values: { [crit[0].id]: 2, [crit[1].id]: 1 } });

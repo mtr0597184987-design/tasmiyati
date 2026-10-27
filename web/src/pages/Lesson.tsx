@@ -49,13 +49,11 @@ export function LessonPage({ lessonId, activityId }: { lessonId: string; activit
   let current = acts.find((a) => a.id === activityId) ?? (preview ? acts[0] : firstOpen);
   if (!preview && statuses[current.id] === 'locked') current = firstOpen;
   const idx = acts.indexOf(current);
-  const coreActs = acts.filter((a) => !a.book); // التقدم في الحصة: الخطوات السبع والنشاط المنزلي
-  const done = coreActs.filter((a) => statuses[a.id] === 'completed').length;
-  const book = acts.filter((a) => a.book);
-  const stageActs = current.book ? book : acts.filter((a) => !a.homework && !a.book && !current.homework && a.stage === current.stage);
+  const done = acts.filter((a) => statuses[a.id] === 'completed').length;
+  const book = acts.filter((a) => a.book); // أجزاء كتاب الطالبة: مهمات داخل مراحل الحصة
   const hw = acts.filter((a) => a.homework);
-  const bookTarget = book.find((a) => statuses[a.id] !== 'completed') ?? book[0];
-  const isStage = (id: number) => current.stage === id && !current.homework && !current.book;
+  const stageActs = current.homework ? hw : acts.filter((a) => !a.homework && a.stage === current.stage);
+  const isStage = (id: number) => current.stage === id && !current.homework;
   const hwTarget = hw.find((a) => statuses[a.id] !== 'completed' && statuses[a.id] !== 'locked') ?? hw[0];
   const hwLocked = !preview && hw.length > 0 && hw.every((a) => statuses[a.id] === 'locked');
   const nav = (id: string) => go(`lesson/${lesson.id}/${id}`);
@@ -120,7 +118,7 @@ export function LessonPage({ lessonId, activityId }: { lessonId: string; activit
                   {lesson.objectives?.length ? <><h4>الأهداف التعليمية</h4>{lesson.objectivesIntro && <p className="small" style={{ marginBottom: 4 }}>{lesson.objectivesIntro}</p>}<ol className="small">{lesson.objectives.map((o, i) => <li key={i}>{o}</li>)}</ol></> : null}
                   {lesson.skillsText && <><h4>مهارات الكتابة</h4><p className="small">{lesson.skillsText}</p></>}
                   {lesson.productLabel && lesson.finalOutput && <><h4>{lesson.productLabel}</h4><p className="small">{lesson.finalOutput}</p></>}
-                  {book.length > 0 && <><h4>من كتاب الطالبة</h4><p className="small">الوحدة التدريبية الرابعة «مهارات الكتابة»، الصفحات المرتبطة بهذه الحصة: {bookPages(book)}. تجدين نصوصها وأنشطتها في «من كتاب الطالبة» آخر شريط المراحل، وهي متاحة في أي وقت.</p></>}
+                  {book.length > 0 && <><h4>من كتاب الطالبة</h4><p className="small">الوحدة التدريبية الرابعة «مهارات الكتابة»، الصفحات المدروسة في هذه الحصة: {bookPages(book)}. تجدينها مهماتٍ داخل مراحل الحصة، وعليها علامة الكتاب ورقم الصفحة.</p><ul className="small">{book.map((a) => <li key={a.id}>ص {a.book!.pages}: {a.title} — {a.homework ? 'النشاط المنزلي' : `المرحلة ${a.stage}: ${cat.stages.find((x) => x.id === a.stage)?.name ?? ''}`}</li>)}</ul></>}
                 </div>
               </details>
             )}
@@ -130,15 +128,15 @@ export function LessonPage({ lessonId, activityId }: { lessonId: string; activit
           </div>
           {!preview && (
             <div style={{ minWidth: 220 }}>
-              <div className="small muted" style={{ marginBottom: 4 }}>تقدمكِ في الحصة: {done} من {coreActs.length}{book.length ? ` · الكتاب: ${book.filter((a) => statuses[a.id] === 'completed').length} من ${book.length}` : ''}</div>
-              <Progress value={done} total={coreActs.length} label="تقدمكِ في الحصة" />
+              <div className="small muted" style={{ marginBottom: 4 }}>تقدمكِ في الحصة: {done} من {acts.length} مهمة</div>
+              <Progress value={done} total={acts.length} label="تقدمكِ في الحصة" />
             </div>
           )}
         </div>
 
         <nav className="stagebar" aria-label="خطوات الاستراتيجية">
           {cat.stages.map((s) => {
-            const sa = acts.filter((a) => !a.homework && !a.book && a.stage === s.id);
+            const sa = acts.filter((a) => !a.homework && a.stage === s.id);
             const allDone = sa.length > 0 && sa.every((a) => statuses[a.id] === 'completed');
             const locked = !preview && sa.every((a) => statuses[a.id] === 'locked');
             const target = preview ? sa[0] : sa.find((a) => statuses[a.id] !== 'completed' && statuses[a.id] !== 'locked') ?? sa[0];
@@ -161,23 +159,14 @@ export function LessonPage({ lessonId, activityId }: { lessonId: string; activit
               <span className="name">النشاط المنزلي</span>
             </button>
           )}
-          {book.length > 0 && (
-            <button className={`stage book ${current.book ? 'current' : ''} ${!preview && book.every((a) => statuses[a.id] === 'completed') ? 'done' : ''}`}
-              style={{ ['--c' as any]: 'var(--book, #7a5ea8)' }} aria-current={current.book ? 'step' : undefined}
-              title={`أنشطة كتاب الطالبة المرتبطة بهذه الحصة (ص ${bookPages(book)})، متاحة في أي وقت`} onClick={() => bookTarget && nav(bookTarget.id)}>
-              {!preview && book.every((a) => statuses[a.id] === 'completed') && <span className="tick"><Icon name="check" size={16} stroke={2.6} /></span>}
-              <span className="num"><Icon name="book" size={15} /></span>
-              <span className="name">من كتاب الطالبة</span>
-            </button>
-          )}
         </nav>
 
-        {(stageActs.length > 1 || current.book) && (
+        {stageActs.length > 1 && (
           <div className="activity-tabs" role="tablist" aria-label="أنشطة الخطوة">
             {stageActs.map((a) => (
               <button key={a.id} className="activity-tab" role="tab" aria-current={a.id === current.id} disabled={!preview && statuses[a.id] === 'locked'} onClick={() => nav(a.id)}>
                 {statuses[a.id] === 'completed' ? <Icon name="check" size={15} /> : statuses[a.id] === 'locked' ? <Icon name="lock" size={14} /> : null}
-                {a.book ? <>ص {a.book.pages}: </> : <>({taskNo(a.id)}) </>}{a.title}
+                {a.book ? <><Icon name="book" size={14} /> ص {a.book.pages}: </> : a.homework ? null : <>({taskNo(a.id)}) </>}{a.title}
               </button>
             ))}
           </div>
@@ -186,7 +175,7 @@ export function LessonPage({ lessonId, activityId }: { lessonId: string; activit
         <ActivityView
           key={current.id}
           lesson={lesson} activity={current} catalog={cat} status={statuses[current.id] ?? 'available'} preview={preview}
-          position={current.book ? { index: book.indexOf(current), total: book.length, done: book.filter((a) => statuses[a.id] === 'completed').length } : { index: idx, total: coreActs.length, done }}
+          position={{ index: idx, total: acts.length, done }}
           onCompleted={refreshStatuses}
           prevId={acts[idx - 1]?.id} nextId={acts[idx + 1]?.id} onNavigate={nav}
         />

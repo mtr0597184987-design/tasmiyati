@@ -48,11 +48,11 @@ route('GET', '/api/catalog', 'any', (c) => {
   const content = loadContent();
   const lessons = allLessons().map((l) => {
     const enabled = l.status === 'authored' && lessonEnabled(l.id);
-    let progress = { done: 0, total: l.activities.filter((a) => !a.book).length, current: null as null | { id: string; title: string; stage: number; homework?: boolean; book?: boolean } };
+    let progress = { done: 0, total: l.activities.length, current: null as null | { id: string; title: string; stage: number; homework?: boolean; book?: boolean } };
     if (c.user!.role === 'student' && l.activities.length) {
       const st = activityStatuses(c.user!.id, l);
-      progress.done = l.activities.filter((a) => !a.book && st[a.id] === 'completed').length;
-      const cur = l.activities.find((a) => !a.book && st[a.id] !== 'completed' && st[a.id] !== 'locked') ?? l.activities.find((a) => st[a.id] !== 'completed' && st[a.id] !== 'locked');
+      progress.done = l.activities.filter((a) => st[a.id] === 'completed').length;
+      const cur = l.activities.find((a) => st[a.id] !== 'completed' && st[a.id] !== 'locked');
       if (cur) progress.current = { id: cur.id, title: cur.title, stage: cur.stage, homework: !!cur.homework, book: !!cur.book };
     }
     return {

@@ -49,8 +49,8 @@ test('البيانات تبقى في القاعدة السحابية بعد مس
   await t('PATCH', '/api/teacher/lessons/L01', { enabled: true, reviewed: true });
   const s = client();
   assert.equal((await s('POST', '/api/auth/student', { code: codes[0].code })).status, 200);
-  await s('PUT', '/api/activities/1-1/responses', { values: { topic: 'ب', goal: 'ب', relation: 'نص محفوظ سحابيًا' } });
-  assert.equal((await s('POST', '/api/activities/1-1/complete')).status, 200);
+  await s('PUT', '/api/activities/1-K1/responses', { values: { unitHope: 'نص محفوظ سحابيًا' } });
+  assert.equal((await s('POST', '/api/activities/1-K1/complete')).status, 200);
   await new Promise((r) => setTimeout(r, 400));
   const st = (await t('GET', '/api/teacher/settings')).data.storage;
   assert.equal(st.mode, 'turso');
@@ -64,11 +64,11 @@ test('البيانات تبقى في القاعدة السحابية بعد مس
   assert.equal((await t2('POST', '/api/auth/teacher', { password: 'pw-12345678' })).status, 200);
   const ov = (await t2('GET', '/api/teacher/overview')).data;
   assert.equal(ov.students.length, 2);
-  assert.equal(ov.students[0].progress.L01['1-1'], 'completed');
+  assert.equal(ov.students[0].progress.L01['1-K1'], 'completed');
   const s2 = client();
   assert.equal((await s2('POST', '/api/auth/student', { code: codes[0].code })).status, 200);
-  const a = (await s2('GET', '/api/activities/1-1')).data;
-  assert.equal(a.values.relation, 'نص محفوظ سحابيًا');
+  const a = (await s2('GET', '/api/activities/1-K1')).data;
+  assert.equal(a.values.unitHope, 'نص محفوظ سحابيًا');
   // كتابة جديدة بعد الاستعادة تحمل معرفات متسقة
   await t2('POST', '/api/teacher/students', { count: 1 });
   await new Promise((r) => setTimeout(r, 400));

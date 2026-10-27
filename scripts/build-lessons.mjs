@@ -172,6 +172,7 @@ function mediaSrc(src) {
   const f = path.join(root, 'content/source', src);
   return `data:image/${f.endsWith('.png') ? 'png' : 'jpeg'};base64,${fs.readFileSync(f).toString('base64')}`;
 }
+/** أجزاء الكتاب مهماتٍ في مراحل الاستراتيجية: المساعد بوظيفة مرحلته واسمها، ويتوقف في الاختبارات */
 function bookActivities(lesson, n) {
   return (book[lesson.id] ?? []).map((b) => {
     const sections = b.sections.map((s, i) => {
@@ -182,24 +183,41 @@ function bookActivities(lesson, n) {
       return sec;
     });
     const fields = sections.flatMap((s) => s.fields);
-    const pages = String(b.pages);
+    const key = b.homework ? 'H' : b.stage;
+    if (key == null) throw new Error(`${lesson.id}/${b.key}: حددي مرحلة جزء الكتاب (stage) أو homework`);
+    const d = STAGE_DEFAULTS[key];
+    const mode = b.test ? 'disabled' : d.mode === 'disabled' ? 'dialogue' : d.mode === 'evaluation' ? 'dialogue' : d.mode;
     return {
-      id: `${n}-${b.key}`, stage: b.test ? 6 : 5, title: b.title,
-      book: { pages, part: b.part, ...(b.test ? { test: true } : {}) },
-      skills: b.skills ?? (lesson.kind === 'book' ? [] : lesson.skills),
-      motivation: b.test ? ['C9', 'A6'] : ['C5', 'A4', 'R1'],
+      id: `${n}-${b.key}`, stage: b.homework ? 7 : b.stage, title: b.title,
+      ...(b.homework ? { homework: true } : {}),
+      book: { pages: String(b.pages), part: b.part, ...(b.test ? { test: true } : {}) },
+      skills: b.skills ?? lesson.skills,
+      motivation: b.test ? ['C9', 'A6'] : d.motivation,
       studentProcedures: b.steps ?? (b.test ? BOOK_TEST_STEPS : BOOK_STEPS),
       materials: [],
       assistant: b.test
-        ? { name: 'المساعد في الاختبار', mode: 'disabled', supportLevel: 'none', opening: b.opening, questions: [], constraints: ['المساعد متوقف في اختبارات الكتاب؛ تجيب الطالبة بنفسها.'], lockMessage: 'هذا اختبار من كتابكِ؛ أجيبي بنفسكِ لتعرفي مستواكِ، ثم ناقشي إجاباتكِ مع معلمتكِ.' }
-        : { name: 'رفيقة الكتاب', mode: 'dialogue', supportLevel: 'medium', opening: b.opening, questions: [], constraints: BOOK_CONSTRAINTS },
+        ? { name: d.name, mode: 'disabled', supportLevel: 'none', opening: b.opening, questions: [], constraints: ['المساعد متوقف في اختبارات الكتاب؛ تجيب الطالبة بنفسها.'], lockMessage: 'هذا اختبار من كتابكِ؛ أجيبي بنفسكِ لتعرفي مستواكِ، ثم ناقشي إجاباتكِ مع معلمتكِ.' }
+        : { name: d.name, mode, supportLevel: b.homework ? 'low' : d.support === 'none' ? 'low' : d.support, opening: b.opening, questions: [], constraints: [...(STAGE_CONSTRAINTS[key] && key !== 6 ? STAGE_CONSTRAINTS[key] : []), ...BOOK_CONSTRAINTS] },
       worksheet: { sections },
-      completeLabel: b.test ? 'إنهاء الاختبار' : 'إكمال هذا الجزء من الكتاب',
+      ...(b.test ? { completeLabel: 'إنهاء الاختبار' } : {}),
       requirements: { fields: fields.filter((f) => f.required).map((f) => f.id) },
+      _before: !!b.before,
     };
   });
 }
-const BOOK_STEPS = ['اقرئي نص كل نشاط من الكتاب كاملًا قبل أن تجيبي.', 'أجيبي بنفسكِ في الخانات تحت كل نشاط، وعودي إلى مراجعكِ حين يطلب النشاط ذلك.', 'استعيني بزر «راجعي إجابتي معي» تحت النشاط ليحاوركِ المساعد في إجابتكِ دون أن يجيب عنكِ.', 'اضغطي «إكمال» بعد أن تنجزي أنشطة هذا الجزء؛ تُحفظ إجاباتكِ في ملف إنجازكِ.'];
+/** دمج أجزاء الكتاب في ترتيب المراحل: قبل مهمة الدليل في مرحلتها أو بعدها، والمنزلية بعد النشاط المنزلي */
+function mergeBook(core, hw, bk) {
+  const out = [];
+  for (let st = 1; st <= 7; st++) {
+    out.push(...bk.filter((a) => !a.homework && a.stage === st && a._before));
+    out.push(...core.filter((a) => a.stage === st));
+    out.push(...bk.filter((a) => !a.homework && a.stage === st && !a._before));
+  }
+  out.push(...hw, ...bk.filter((a) => a.homework));
+  for (const a of out) delete a._before;
+  return out;
+}
+const BOOK_STEPS = ['اقرئي نص كل نشاط من الكتاب كاملًا قبل أن تجيبي.', 'أجيبي بنفسكِ في الخانات تحت كل نشاط، وعودي إلى مراجعكِ حين يطلب النشاط ذلك.', 'استعيني بزر «راجعي إجابتي معي» تحت النشاط ليحاوركِ المساعد في إجابتكِ دون أن يجيب عنكِ.', 'اضغطي «إكمال المهمة» بعد أن تنجزي أنشطة هذا الجزء من الكتاب.'];
 const BOOK_TEST_STEPS = ['هذا اختبار: أجيبي عن كل سؤال بنفسكِ لتعرفي مستواكِ، فالمساعد متوقف هنا.', 'اقرئي السؤال جيدًا، وخططي لإجابتكِ قبل الكتابة.', 'راجعي إجاباتكِ، ثم اضغطي «إكمال».', 'تطّلع معلمتكِ على إجاباتكِ وتقدّرها.'];
 
 const only = process.argv[2];
@@ -211,34 +229,9 @@ for (const g of guide) {
   const spec = (await import(pathToFileURL(specPath).href + `?t=${Date.now()}`)).default;
   const lesson = lessonMeta(g, spec);
   lesson.rubric = rubricFrom(g, spec);
-  lesson.activities = [...g.tasks.map((t) => buildActivity(lesson, g, t, spec, false)), ...(g.homework ? [buildActivity(lesson, g, null, spec, true)] : []), ...bookActivities(lesson, g.number)];
+  lesson.activities = mergeBook(g.tasks.map((t) => buildActivity(lesson, g, t, spec, false)), g.homework ? [buildActivity(lesson, g, null, spec, true)] : [], bookActivities(lesson, g.number));
   const bk = lesson.activities.filter((a) => a.book);
   if (bk.length) lesson.bookPages = bk.map((a) => a.book.pages).join('، ');
   fs.writeFileSync(path.join(root, `content/lessons/lesson-0${g.number}.json`), JSON.stringify(lesson, null, 1) + '\n');
   console.log(`✓ ${id}: ${lesson.title} — ${lesson.activities.length} نشاطًا`);
 }
-
-// ---------- أقسام الكتاب خارج الحصص التسع: مدخل الوحدة، وأنشطة للدروس، وختام الوحدة ----------
-const SECTIONS = [
-  { id: 'UI', number: 0, place: 'intro', title: 'مدخل الوحدة', intro: 'قبل أن تبدئي الدروس: تعرّفي إلى الوحدة وأهدافها، وأدّي النشاطات التمهيدية والاختبار القبلي من كتابكِ.' },
-  { id: 'UD1', number: 1, place: 'lesson', courseLesson: 1, title: 'من كتاب الطالبة: الفن التعبيري والهدف', intro: 'نشاطات التعلم (1–3) من كتابكِ في الدرس الأول، خارج حصصه الثلاث.' },
-  { id: 'UD3', number: 3, place: 'lesson', courseLesson: 3, title: 'من كتاب الطالبة: نشاط منزلي', intro: 'النشاط المنزلي (14) من كتابكِ في الدرس الثالث، خارج حصصه الأربع.' },
-  { id: 'UO', number: 10, place: 'outro', title: 'ختام الوحدة', intro: 'بعد الدروس الثلاثة: الاختبار الذاتي، ونشاطات الغلق والتلخيص، والمادة التعليمية المبرمجة، والاختبار البعدي، وتقويم الأداء.' },
-];
-if (!only) {
-  const dir = path.join(root, 'content/sections');
-  fs.mkdirSync(dir, { recursive: true });
-  const courseTitles = { 1: 'خطوات بناء الموضوع', 2: 'تصميم مخطط الموضوع', 3: 'مهارات بناء الموضوع' };
-  for (const sdef of SECTIONS) {
-    const sec = {
-      id: sdef.id, number: sdef.number, kind: 'book', place: sdef.place, status: 'authored', title: sdef.title, overview: sdef.intro,
-      unit: 'كفاية الاتصال الكتابي – مهارات الكتابة', courseLesson: { number: sdef.courseLesson ?? 0, title: courseTitles[sdef.courseLesson] ?? '' },
-      audience: 'طالبات الصف الأول الثانوي', durationMinutes: 0, skills: [], reinforcedSkills: [], finalOutput: '',
-    };
-    sec.activities = bookActivities(sec, sdef.id);
-    sec.bookPages = sec.activities.map((a) => a.book.pages).join('، ');
-    fs.writeFileSync(path.join(dir, `section-${sdef.id}.json`), JSON.stringify(sec, null, 1) + '\n');
-    console.log(`✓ ${sdef.id}: ${sec.title} — ${sec.activities.length} نشاطًا`);
-  }
-}
-

@@ -173,8 +173,6 @@ export function activityStatuses(studentId: number, lesson: Lesson): Record<stri
   let prevDone = true;
   for (const a of lesson.activities) {
     const r = p.get(a.id);
-    // أنشطة كتاب الطالبة متاحة طوال الحصة، ولا تدخل في سلسلة الخطوات
-    if (a.book) { out[a.id] = r?.status === 'completed' ? 'completed' : r ? 'in_progress' : 'available'; continue; }
     if (r?.status === 'completed') out[a.id] = 'completed';
     else if (prevDone || free || r?.unlocked_by_teacher) out[a.id] = r ? 'in_progress' : 'available';
     else out[a.id] = 'locked';
