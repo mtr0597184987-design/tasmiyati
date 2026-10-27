@@ -3,7 +3,7 @@ import { productText } from '../shared/outline.ts';
 import { route, HttpError } from './http.ts';
 import { all, get, getSetting, parse, run, setSetting, tx } from './db.ts';
 import { hashPassword, newStudentCode, verifyPassword } from './auth.ts';
-import { activityFields, allLessons, findActivity, getLesson, EDITABLE_ASSISTANT_KEYS, loadContent, validateContent } from './content.ts';
+import { activityFields, allLessons, allUnits, findActivity, getLesson, EDITABLE_ASSISTANT_KEYS, loadContent, validateContent } from './content.ts';
 import { activityStatuses, appSettings, getArtifact, getValues, DEFAULT_SETTINGS } from './logic.ts';
 import { callModel, formatValue, getAIConfig, AIError } from './ai.ts';
 import { portfolioData } from './portfolio.ts';
@@ -23,10 +23,10 @@ function studentOr404(id: string | number) {
 
 // ---------- الطالبات ----------
 route('GET', '/api/teacher/overview', 'teacher', () => {
-  const lessons = allLessons().filter((l) => l.activities.length);
+  const lessons = allUnits().filter((l) => l.activities.length);
   const students = all("SELECT id, code, label, real_name, group_name, free_navigation, created_at FROM users WHERE role = 'student' ORDER BY id");
   return {
-    lessons: lessons.map((l) => ({ id: l.id, number: l.number, title: l.title, activities: l.activities.map((a) => ({ id: a.id, title: a.title, stage: a.stage, homework: !!a.homework, book: a.book ?? null })) })),
+    lessons: lessons.map((l) => ({ id: l.id, number: l.number, title: l.title, kind: l.kind ?? null, activities: l.activities.map((a) => ({ id: a.id, title: a.title, stage: a.stage, homework: !!a.homework, book: a.book ?? null })) })),
     students: students.map((s) => {
       const perLesson = Object.fromEntries(lessons.map((l) => [l.id, activityStatuses(s.id, l)]));
       const pendingShares = get("SELECT COUNT(*) AS n FROM shares WHERE student_id = ? AND status = 'pending'", s.id)?.n ?? 0;
@@ -86,11 +86,11 @@ route('DELETE', '/api/teacher/students/:id', 'teacher', (c) => {
 
 route('GET', '/api/teacher/students/:id', 'teacher', (c) => {
   const s = studentOr404(c.params.id);
-  const lessons = allLessons().filter((l) => l.activities.length).map((l) => {
+  const lessons = allUnits().filter((l) => l.activities.length).map((l) => {
     const st = activityStatuses(s.id, l);
     const prog = new Map(all('SELECT * FROM progress WHERE student_id = ? AND lesson_id = ?', s.id, l.id).map((p) => [p.activity_id, p]));
     return {
-      id: l.id, number: l.number, title: l.title, rubric: l.rubric ?? null, productFields: l.productFields ?? [],
+      id: l.id, number: l.number, title: l.title, kind: l.kind ?? null, rubric: l.rubric ?? null, productFields: l.productFields ?? [],
       initial: getArtifact(s.id, l.id, 'initial'),
       revised: getArtifact(s.id, l.id, 'revised'),
       activities: l.activities.map((a) => {
@@ -230,9 +230,9 @@ route('GET', '/api/teacher/content', 'teacher', () => {
   return {
     validation: validateContent(),
     motivation: content.motivation,
-    lessons: allLessons().map((l) => ({
+    lessons: allUnits().map((l) => ({
       ...l,
-      enabled: !!states.get(l.id)?.enabled,
+      enabled: states.get(l.id) ? !!states.get(l.id)?.enabled : l.kind === 'book',
       reviewedAt: states.get(l.id)?.reviewed_at ?? null,
       overridden: l.activities.filter((a) => overrides.has(`activity:${a.id}`)).map((a) => a.id),
       rubricOverridden: overrides.has(`rubric:${l.id}`),
@@ -430,7 +430,7 @@ const csvCell = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""').replace(
 const withNames = (c: any) => c.url.searchParams.get('names') === '1';
 
 route('GET', '/api/teacher/export.csv', 'teacher', (c) => {
-  const lessons = allLessons().filter((l) => l.activities.length);
+  const lessons = allUnits().filter((l) => l.activities.length);
   const names = withNames(c);
   const students = all("SELECT id, code, label, real_name, group_name FROM users WHERE role = 'student' ORDER BY id")
     .map((s): Record<string, any> => ({ ...s, label: names && s.real_name ? `${s.label} — ${s.real_name}` : s.label }));
@@ -442,7 +442,7 @@ route('GET', '/api/teacher/export.csv', 'teacher', (c) => {
       const p = get('SELECT opened_at, completed_at FROM progress WHERE student_id = ? AND activity_id = ?', s.id, a.id);
       const resp = all('SELECT field_id, value, updated_at FROM responses WHERE student_id = ? AND activity_id = ?', s.id, a.id);
       const fields = activityFields(a);
-      const base = [s.code, s.label, s.group_name, l.number, a.id, a.stage, st[a.id], p?.opened_at, p?.completed_at];
+      const base = [s.code, s.label, s.group_name, l.kind === 'book' ? l.title : l.number, a.id, a.stage, st[a.id], p?.opened_at, p?.completed_at];
       if (!resp.length) rows.push([...base, '', '', ''].map(csvCell).join(','));
       for (const r of resp) {
         const f = fields.find((x) => x.id === r.field_id);
@@ -468,10 +468,10 @@ route('GET', '/api/teacher/export-ratings.csv', 'teacher', (c) => {
   const students = all("SELECT id, code, label, real_name FROM users WHERE role = 'student' ORDER BY id");
   const header = ['المعرف الدراسي', 'الاسم المستعار', ...(names ? ['الاسم'] : []), 'الحصة', 'النشاط', 'عنوان النشاط', 'البند', 'الدرجة', 'المستوى', 'ملاحظة المعلمة', 'تاريخ التقدير'];
   const rows: string[] = [header.map(csvCell).join(',')];
-  for (const s of students) for (const l of allLessons().filter((x) => x.activities.length)) for (const a of l.activities) {
+  for (const s of students) for (const l of allUnits().filter((x) => x.activities.length)) for (const a of l.activities) {
     const r = getRatings(s.id, a.id);
     if (!Object.keys(r.values).length && !r.note) continue;
-    const base = [s.code, s.label, ...(names ? [s.real_name ?? ''] : []), l.number, a.id, a.title];
+    const base = [s.code, s.label, ...(names ? [s.real_name ?? ''] : []), l.kind === 'book' ? l.title : l.number, a.id, a.title];
     for (const cr of activityCriteria(l, a).criteria) {
       const v = r.values[cr.id];
       rows.push([...base, cr.text, v ?? '', v != null ? lv(v) : '', '', r.updatedAt].map(csvCell).join(','));

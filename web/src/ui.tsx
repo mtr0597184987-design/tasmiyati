@@ -155,9 +155,14 @@ export function PreviewBar() {
 }
 
 /** رقم المهمة للعرض: الرقم الأول للحصة والثاني لترتيب المهمة، ويُقرأ من اليمين (علامتا اتجاه حول الشرطة) */
+/** اسم الحصة أو قسم الكتاب في القوائم */
+export function unitLabel(l: { number: number; title: string; kind?: string | null }, withTitle = false): string {
+  return l.kind === 'book' ? `كتاب الطالبة: ${l.title}` : withTitle ? `الحصة ${l.number}: ${l.title}` : `الحصة ${l.number}`;
+}
+
 export function taskNo(id: string): string {
   const [l, t] = String(id).split('-');
-  if (t === 'H') return 'البيتي';
+  if (t === 'H') return 'المنزلي';
   if (t?.startsWith('K')) return `الكتاب ${t.slice(1)}`;
   return t ? `${l}\u200F-\u200F${t}` : String(id);
 }

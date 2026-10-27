@@ -131,7 +131,7 @@ export interface Activity {
   stage: StageId;
   title: string;
   minutes?: number;
-  homework?: boolean; // النشاط البيتي: بعد الخطوة السابعة وخارج ترتيبها
+  homework?: boolean; // النشاط المنزلي: بعد الخطوة السابعة وخارج ترتيبها
   book?: { pages: string; part: string; test?: boolean; note?: string }; // من كتاب الطالبة: متاح طوال الحصة وخارج ترتيب الخطوات
   completeLabel?: string; // اسم زر الإكمال (مثل «اعتماد موضوعي»)
   submitLabel?: string; // اسم زر التسليم في الإنتاج المستقل (مثل «تسليم المهمة»)
@@ -157,6 +157,8 @@ export interface Rubric { header?: string; levels: { id: string; label: string }
 
 export interface Lesson {
   id: string;
+  kind?: 'book'; // قسم من كتاب الطالبة خارج الحصص التسع (مدخل الوحدة، أنشطة للدرس، ختام الوحدة)
+  place?: 'intro' | 'lesson' | 'outro';
   number: number;
   status: 'authored' | 'draft';
   title: string;
@@ -175,7 +177,7 @@ export interface Lesson {
   skillsText?: string; // مهارات الكتابة كما وردت في الدليل
   productLabel?: string; // «المنتج الكتابي» أو «التطبيق الكتابي»
   homeworkTitle?: string;
-  homeworkFollowup?: string[]; // متابعة المعلمة وتقويم النشاط البيتي
+  homeworkFollowup?: string[]; // متابعة المعلمة وتقويم النشاط المنزلي
   bookPages?: string; // صفحات كتاب الطالبة المرتبطة بالحصة
   productFields?: Field[]; // تُشتق تلقائيًا من حقول نشاط الإنتاج المستقل
   rubric?: Rubric;

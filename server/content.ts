@@ -21,6 +21,7 @@ let cache: {
   rules: string[];
   style: string;
   lessons: Lesson[];
+  sections: Lesson[]; // أقسام كتاب الطالبة خارج الحصص التسع
 } | null = null;
 
 export function loadContent(force = false) {
@@ -31,6 +32,10 @@ export function loadContent(force = false) {
   const rules = readJson<{ rules: string[]; style: string }>('assistant-rules.json');
   const files = fs.readdirSync(path.join(CONTENT_DIR, 'lessons')).filter((f) => f.endsWith('.json')).sort();
   const lessons = files.map((f) => readJson<Lesson>(path.join('lessons', f))).sort((a, b) => a.number - b.number);
+  const secDir = path.join(CONTENT_DIR, 'sections');
+  const sections = fs.existsSync(secDir)
+    ? fs.readdirSync(secDir).filter((f) => f.endsWith('.json')).map((f) => readJson<Lesson>(path.join('sections', f))).sort((a, b) => a.number - b.number)
+    : [];
   cache = {
     stages: strategy.stages,
     skills: skills.skills,
@@ -39,6 +44,7 @@ export function loadContent(force = false) {
     rules: rules.rules,
     style: rules.style,
     lessons,
+    sections,
   };
   return cache;
 }
@@ -50,7 +56,8 @@ function deepClone<T>(x: T): T { return JSON.parse(JSON.stringify(x)); }
 
 /** حصة بعد دمج تعديلات المعلمة (تعليمات المساعد ومعايير التقويم) */
 export function getLesson(id: string): Lesson | undefined {
-  const base = loadContent().lessons.find((l) => l.id === id);
+  const c = loadContent();
+  const base = c.lessons.find((l) => l.id === id) ?? c.sections.find((l) => l.id === id);
   if (!base) return undefined;
   const lesson = deepClone(base);
   // حقول المنتج = حقول نشاط الإنتاج المستقل نفسها (بأنواعها وقيودها)
@@ -69,12 +76,22 @@ export function getLesson(id: string): Lesson | undefined {
   return lesson;
 }
 
+/** الحصص التسع فقط */
 export function allLessons(): Lesson[] {
   return loadContent().lessons.map((l) => getLesson(l.id)!);
 }
+/** أقسام كتاب الطالبة خارج الحصص (مدخل الوحدة، وأنشطة الدروس، وختام الوحدة) */
+export function allSections(): Lesson[] {
+  return loadContent().sections.map((l) => getLesson(l.id)!);
+}
+/** الحصص والأقسام معًا (للبحث عن نشاط ولوحة المعلمة) */
+export function allUnits(): Lesson[] {
+  return [...allLessons(), ...allSections()];
+}
+export const isSection = (id: string) => loadContent().sections.some((s) => s.id === id);
 
 export function findActivity(activityId: string): { lesson: Lesson; activity: Activity; index: number } | undefined {
-  for (const l of allLessons()) {
+  for (const l of allUnits()) {
     const index = l.activities.findIndex((a) => a.id === activityId);
     if (index >= 0) return { lesson: l, activity: l.activities[index], index };
   }
@@ -148,9 +165,9 @@ export function validateContent(): { errors: string[]; warnings: string[] } {
     if (l.status !== 'authored') { warnings.push(`${l.id}: مسودة (لم يُعدّ محتواها بعد).`); continue; }
     const core = l.activities.filter((a) => !a.homework && !a.book);
     const firstHw = l.activities.findIndex((a) => a.homework);
-    if (firstHw >= 0 && l.activities.slice(firstHw).some((a) => !a.homework && !a.book)) errors.push(`${l.id}: النشاط البيتي يجب أن يأتي بعد الخطوات السبع.`);
+    if (firstHw >= 0 && l.activities.slice(firstHw).some((a) => !a.homework && !a.book)) errors.push(`${l.id}: النشاط المنزلي يجب أن يأتي بعد الخطوات السبع.`);
     const firstBook = l.activities.findIndex((a) => a.book);
-    if (firstBook >= 0 && l.activities.slice(firstBook).some((a) => !a.book)) errors.push(`${l.id}: أنشطة كتاب الطالبة تأتي بعد الخطوات السبع والنشاط البيتي.`);
+    if (firstBook >= 0 && l.activities.slice(firstBook).some((a) => !a.book)) errors.push(`${l.id}: أنشطة كتاب الطالبة تأتي بعد الخطوات السبع والنشاط المنزلي.`);
     const stages = core.map((a) => a.stage);
     for (let s = 1; s <= 7; s++) if (!stages.includes(s as any)) errors.push(`${l.id}: الخطوة ${s} غير موجودة.`);
     for (let i = 1; i < stages.length; i++) if (stages[i] < stages[i - 1]) errors.push(`${l.id}: ترتيب الخطوات مخالف عند النشاط ${core[i].id}.`);
@@ -171,6 +188,16 @@ export function validateContent(): { errors: string[]; warnings: string[] } {
       if (!a.homework && !a.book && a.stage === 7 && !a.evaluation) errors.push(`${a.id}: خطوة التقويم يجب أن تحدد المنتج المستقل المصدر.`);
       for (const p of a.showProducts ?? []) if (!c.lessons.some((x) => x.id === p && x.number < l.number) && p !== l.id) errors.push(`${a.id}: منتج غير معروف أو لاحق ${p}.`);
       for (const f of activityFields(a)) for (const p of f.prefill ?? []) if (!(a.homework && p.lesson === l.id) && !c.lessons.some((x) => x.id === p.lesson && x.number < l.number)) errors.push(`${a.id}/${f.id}: استرجاع من حصة غير سابقة ${p.lesson}.`);
+    }
+  }
+  for (const sec of c.sections) {
+    for (const a of sec.activities) {
+      if (seen.has(a.id)) errors.push(`معرف نشاط مكرر ${a.id}`);
+      seen.add(a.id);
+      if (!a.book) errors.push(`${a.id}: أنشطة الأقسام يجب أن تكون من كتاب الطالبة.`);
+      const fids = new Set(activityFields(a).map((f) => f.id));
+      if (fids.size !== activityFields(a).length) errors.push(`${a.id}: معرف حقل مكرر.`);
+      for (const r of a.requirements.fields) if (!fids.has(r)) errors.push(`${a.id}: متطلب لحقل غير موجود ${r}.`);
     }
   }
   return { errors, warnings };

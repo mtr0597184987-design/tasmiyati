@@ -35,6 +35,20 @@ if (getSetting<number>('contentVersion', 1) !== CONTENT_VERSION) {
   console.log(`حُدّثت بنية المحتوى إلى الإصدار ${CONTENT_VERSION}، ومُسحت تعديلات الأنشطة القديمة.`);
 }
 
+// نقل أنشطة الكتاب من الحصتين الأولى والتاسعة إلى أقسام خارج الحصص (مدخل الوحدة، وأنشطة الدروس، وختام الوحدة)
+if (!getSetting<boolean>('bookSectionsMoved', false)) {
+  const MOVE: [string, string, string][] = [
+    ['1-K1', 'UI-K1', 'UI'], ['1-K2', 'UI-K2', 'UI'], ['1-K3', 'UI-K3', 'UI'], ['1-K4', 'UD1-K1', 'UD1'],
+    ['9-K1', 'UD3-K1', 'UD3'], ['9-K2', 'UO-K1', 'UO'], ['9-K3', 'UO-K2', 'UO'], ['9-K4', 'UO-K3', 'UO'], ['9-K5', 'UO-K4', 'UO'], ['9-K6', 'UO-K5', 'UO'],
+  ];
+  for (const [from, to, lesson] of MOVE) {
+    for (const t of ['responses', 'chat_messages', 'hint_log', 'feedback', 'teacher_notes', 'skill_log', 'shares', 'teacher_ratings']) run(`UPDATE ${t} SET activity_id = ? WHERE activity_id = ?`, to, from);
+    run('UPDATE progress SET activity_id = ?, lesson_id = ? WHERE activity_id = ?', to, lesson, from);
+    run('UPDATE overrides SET target = ? WHERE target = ?', `activity:${to}`, `activity:${from}`);
+  }
+  setSetting('bookSectionsMoved', true);
+}
+
 const pw = ensureTeacher();
 if (pw) console.log(`\n=== أُنشئ حساب المعلمة. كلمة المرور: ${pw} — غيّريها من لوحة المعلمة ← الإعدادات ===\n`);
 

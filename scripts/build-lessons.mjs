@@ -17,7 +17,7 @@ const STAGE_DEFAULTS = {
   5: { name: 'مدربة الممارسة', mode: 'dialogue', support: 'fading', motivation: ['C2', 'C6', 'R5', 'R8', 'R9'] },
   6: { name: 'حارسة الاستقلال الكتابي', mode: 'disabled', support: 'none', motivation: ['C9', 'A6', 'A8'] },
   7: { name: 'مرشدة التقويم والتحسين', mode: 'evaluation', support: 'low', motivation: ['C7', 'A7', 'R1', 'R3'] },
-  H: { name: 'رفيقة النشاط البيتي', mode: 'dialogue', support: 'low', motivation: ['C5', 'A4', 'R1'] },
+  H: { name: 'رفيقة النشاط المنزلي', mode: 'dialogue', support: 'low', motivation: ['C5', 'A4', 'R1'] },
 };
 const STAGE_CONSTRAINTS = {
   1: ['ابدئي من الموقف المعروض في المهمة، واربطيه بخبرة الطالبة، دون أن تقدمي الإجابة قبل محاولتها.'],
@@ -27,7 +27,7 @@ const STAGE_CONSTRAINTS = {
   5: ['قدّمي تغذية راجعة تشخيصية تحدد الموضع والسبب، ولا تكتبي الإجابة أو النص المعدَّل نيابة عن الطالبة.', 'خفّفي المساندة تدريجيًا: سؤال موجه، ثم تلميح أدق، ثم مثال من مجال مختلف.'],
   6: ['المساعد التوليدي معطل برمجيًا في هذه المرحلة؛ يرفض الخادم أي طلب توليد ما دامت الطالبة لم تسلّم.'],
   7: ['لا تعيدي كتابة إنتاج الطالبة ولا تقترحي صياغة بديلة كاملة؛ حددي الموضع واطرحي سؤالًا يوجه التحسين.'],
-  H: ['ساعدي الطالبة على التفكير في مهمتها البيتية بأسئلة موجزة، ولا تنجزيها نيابة عنها.'],
+  H: ['ساعدي الطالبة على التفكير في مهمتها المنزلية بأسئلة موجزة، ولا تنجزيها نيابة عنها.'],
 };
 const CHECK_MSG = 'افحصي ما كتبته الطالبة في هذا النشاط، واطرحي عليها أسئلة إرشادية تكشف مواضع القوة والتحسين وفق المطلوب في النشاط، دون أن تكتبي الإجابة أو تعدّليها نيابة عنها.';
 
@@ -103,7 +103,7 @@ function buildActivity(lesson, g, t, spec, isHw) {
     const s = { ...((ts.acts ?? {})[act.n] ?? {}) };
     if (!isHw && t.stage === 7 && act.n === 1 && s.table == null) s.table = 'drop'; // معايير التقويم يعرضها مكوّن التقويم الذاتي
     const sec = buildSection(act, s, `${id}/${act.n}`);
-    if (isHw) { sec.number = undefined; sec.title = `المهمة البيتية ${act.n === 1 ? 'الأولى' : 'الثانية'}: ${act.title}`; }
+    if (isHw) { sec.number = undefined; sec.title = `المهمة المنزلية ${act.n === 1 ? 'الأولى' : 'الثانية'}: ${act.title}`; }
     return sec;
   });
   const fields = sections.flatMap((s) => s.fields);
@@ -113,7 +113,7 @@ function buildActivity(lesson, g, t, spec, isHw) {
     skills: ts.skills ?? lesson.skills,
     motivation: ts.motivation ?? d.motivation,
     teacherProcedures: isHw ? g.homework.followup : t.teacher,
-    studentProcedures: isHw ? (ts.studentSteps ?? []) : t.student, // النشاط البيتي: خطوات للطالبة مشتقة من نصه (الدليل لا يذكرها)
+    studentProcedures: isHw ? (ts.studentSteps ?? []) : t.student, // النشاط المنزلي: خطوات للطالبة مشتقة من نصه (الدليل لا يذكرها)
     materials: [],
     assistant: {
       name: ts.name ?? d.name, mode: d.mode, supportLevel: ts.support ?? d.support,
@@ -186,7 +186,7 @@ function bookActivities(lesson, n) {
     return {
       id: `${n}-${b.key}`, stage: b.test ? 6 : 5, title: b.title,
       book: { pages, part: b.part, ...(b.test ? { test: true } : {}) },
-      skills: b.skills ?? lesson.skills,
+      skills: b.skills ?? (lesson.kind === 'book' ? [] : lesson.skills),
       motivation: b.test ? ['C9', 'A6'] : ['C5', 'A4', 'R1'],
       studentProcedures: b.steps ?? (b.test ? BOOK_TEST_STEPS : BOOK_STEPS),
       materials: [],
@@ -217,3 +217,28 @@ for (const g of guide) {
   fs.writeFileSync(path.join(root, `content/lessons/lesson-0${g.number}.json`), JSON.stringify(lesson, null, 1) + '\n');
   console.log(`✓ ${id}: ${lesson.title} — ${lesson.activities.length} نشاطًا`);
 }
+
+// ---------- أقسام الكتاب خارج الحصص التسع: مدخل الوحدة، وأنشطة للدروس، وختام الوحدة ----------
+const SECTIONS = [
+  { id: 'UI', number: 0, place: 'intro', title: 'مدخل الوحدة', intro: 'قبل أن تبدئي الدروس: تعرّفي إلى الوحدة وأهدافها، وأدّي النشاطات التمهيدية والاختبار القبلي من كتابكِ.' },
+  { id: 'UD1', number: 1, place: 'lesson', courseLesson: 1, title: 'من كتاب الطالبة: الفن التعبيري والهدف', intro: 'نشاطات التعلم (1–3) من كتابكِ في الدرس الأول، خارج حصصه الثلاث.' },
+  { id: 'UD3', number: 3, place: 'lesson', courseLesson: 3, title: 'من كتاب الطالبة: نشاط منزلي', intro: 'النشاط المنزلي (14) من كتابكِ في الدرس الثالث، خارج حصصه الأربع.' },
+  { id: 'UO', number: 10, place: 'outro', title: 'ختام الوحدة', intro: 'بعد الدروس الثلاثة: الاختبار الذاتي، ونشاطات الغلق والتلخيص، والمادة التعليمية المبرمجة، والاختبار البعدي، وتقويم الأداء.' },
+];
+if (!only) {
+  const dir = path.join(root, 'content/sections');
+  fs.mkdirSync(dir, { recursive: true });
+  const courseTitles = { 1: 'خطوات بناء الموضوع', 2: 'تصميم مخطط الموضوع', 3: 'مهارات بناء الموضوع' };
+  for (const sdef of SECTIONS) {
+    const sec = {
+      id: sdef.id, number: sdef.number, kind: 'book', place: sdef.place, status: 'authored', title: sdef.title, overview: sdef.intro,
+      unit: 'كفاية الاتصال الكتابي – مهارات الكتابة', courseLesson: { number: sdef.courseLesson ?? 0, title: courseTitles[sdef.courseLesson] ?? '' },
+      audience: 'طالبات الصف الأول الثانوي', durationMinutes: 0, skills: [], reinforcedSkills: [], finalOutput: '',
+    };
+    sec.activities = bookActivities(sec, sdef.id);
+    sec.bookPages = sec.activities.map((a) => a.book.pages).join('، ');
+    fs.writeFileSync(path.join(dir, `section-${sdef.id}.json`), JSON.stringify(sec, null, 1) + '\n');
+    console.log(`✓ ${sdef.id}: ${sec.title} — ${sec.activities.length} نشاطًا`);
+  }
+}
+

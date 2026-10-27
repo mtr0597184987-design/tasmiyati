@@ -144,7 +144,7 @@ export function ActivityView({ lesson, activity: a, catalog, status, preview, po
     try {
       if (!(await save())) { toast('تعذّر حفظ إجاباتكِ على الخادم. هي محفوظة على هذا الجهاز؛ حاولي مرة أخرى عند عودة الاتصال.', 'error'); return; }
       await api(`/api/activities/${a.id}/complete`, { body: {} });
-      toast(`${a.homework ? 'أنجزتِ النشاط البيتي، وحُفظ عملكِ.' : a.book ? 'أحسنتِ؛ أنجزتِ أنشطة هذا الجزء من الكتاب، وحُفظ عملكِ.' : STAGE_PRAISE[a.stage]} (أنجزتِ ${position.done + (status === 'completed' ? 0 : 1)} من ${position.total} ${a.book ? 'من أجزاء الكتاب في هذه الحصة' : 'في هذه الحصة'})`, 'ok');
+      toast(`${a.homework ? 'أنجزتِ النشاط المنزلي، وحُفظ عملكِ.' : a.book ? 'أحسنتِ؛ أنجزتِ أنشطة هذا الجزء من الكتاب، وحُفظ عملكِ.' : STAGE_PRAISE[a.stage]} (أنجزتِ ${position.done + (status === 'completed' ? 0 : 1)} من ${position.total} ${a.book ? (lesson.kind === 'book' ? 'في هذا القسم' : 'من أجزاء الكتاب في هذه الحصة') : 'في هذه الحصة'})`, 'ok');
       await onCompleted();
       if (nextId) onNavigate(nextId);
     } catch (e: any) {
@@ -189,7 +189,7 @@ export function ActivityView({ lesson, activity: a, catalog, status, preview, po
     <div className="pane-work">
       <div className="card">
         <header className="activity-header" style={{ ['--c' as any]: color }}>
-          <div className="eyebrow">{a.book ? <>من كتاب الطالبة · {a.book.part} · ص {a.book.pages}</> : a.homework ? <>النشاط البيتي{lesson.homeworkTitle ? `: ${lesson.homeworkTitle}` : ''}</> : <>المرحلة {ORD[stage.id]}: {stage.name} · المهمة ({taskNo(a.id)}){a.minutes ? ` · ${a.minutes} ${a.minutes > 10 ? 'دقيقة' : 'دقائق'}` : ''}</>}</div>
+          <div className="eyebrow">{a.book ? <>من كتاب الطالبة · {a.book.part} · ص {a.book.pages}</> : a.homework ? <>النشاط المنزلي{lesson.homeworkTitle ? `: ${lesson.homeworkTitle}` : ''}</> : <>المرحلة {ORD[stage.id]}: {stage.name} · المهمة ({taskNo(a.id)}){a.minutes ? ` · ${a.minutes} ${a.minutes > 10 ? 'دقيقة' : 'دقائق'}` : ''}</>}</div>
           <h2>{a.title}</h2>
           {a.goal && <div className="goal"><b>هدف المهمة: </b>{a.goal}</div>}
           <div className="skill-pills">
@@ -199,12 +199,12 @@ export function ActivityView({ lesson, activity: a, catalog, status, preview, po
         </header>
 
         <details className="box" style={{ marginBottom: 14 }}>
-          <summary><span><Icon name="list" size={16} /> {a.homework ? 'ماذا سأفعل في النشاط البيتي؟' : a.book ? 'ماذا سأفعل هنا؟' : 'ماذا سأفعل في هذه المهمة؟'}</span><Icon name="down" size={16} /></summary>
+          <summary><span><Icon name="list" size={16} /> {a.homework ? 'ماذا سأفعل في النشاط المنزلي؟' : a.book ? 'ماذا سأفعل هنا؟' : 'ماذا سأفعل في هذه المهمة؟'}</span><Icon name="down" size={16} /></summary>
           <div className="body">
-            {a.studentProcedures.length > 0 && <><h4 style={{ marginTop: 0 }}>{a.homework ? 'خطواتي في النشاط البيتي' : a.book ? 'خطواتي' : 'إجراءات التنفيذ المرتبطة بالطالبة'}</h4><ol style={{ margin: 0 }}>{a.studentProcedures.map((p, i) => <li key={i}>{p}</li>)}</ol></>}
+            {a.studentProcedures.length > 0 && <><h4 style={{ marginTop: 0 }}>{a.homework ? 'خطواتي في النشاط المنزلي' : a.book ? 'خطواتي' : 'إجراءات التنفيذ المرتبطة بالطالبة'}</h4><ol style={{ margin: 0 }}>{a.studentProcedures.map((p, i) => <li key={i}>{p}</li>)}</ol></>}
             {a.teacherProcedures && (
               <>
-                <h4 style={{ marginTop: 12 }}>{a.homework ? 'متابعة المعلمة وتقويم النشاط البيتي' : 'إجراءات التنفيذ المرتبطة بالمعلمة'}</h4>
+                <h4 style={{ marginTop: 12 }}>{a.homework ? 'متابعة المعلمة وتقويم النشاط المنزلي' : 'إجراءات التنفيذ المرتبطة بالمعلمة'}</h4>
                 <ol style={{ margin: 0 }}>{a.teacherProcedures.map((p, i) => <li key={i}>{p}</li>)}</ol>
               </>
             )}
@@ -241,7 +241,7 @@ export function ActivityView({ lesson, activity: a, catalog, status, preview, po
                 <Alert kind="info" icon="pen">هذه مساحة الإنتاج المستقل: اكتبي بنفسكِ، فالمساعد الذكي وأدوات توليد النصوص معطلة. تُحفظ مسودتكِ تلقائيًا، ولا يُعتمد إنتاجكِ إلا عند الضغط على «{submitLabel}».</Alert>
               )}
               <div className="row between" style={{ marginTop: 14 }}>
-                <h3 style={{ margin: 0 }}><Icon name="edit" size={18} style={{ verticalAlign: -3 }} /> {a.independent ? 'إنتاجي المستقل' : a.homework ? 'النشاط البيتي' : a.book ? (a.book.test ? 'أسئلة الاختبار' : 'أنشطة الكتاب') : 'أنشطة المهمة'}</h3>
+                <h3 style={{ margin: 0 }}><Icon name="edit" size={18} style={{ verticalAlign: -3 }} /> {a.independent ? 'إنتاجي المستقل' : a.homework ? 'النشاط المنزلي' : a.book ? (a.book.test ? 'أسئلة الاختبار' : 'أنشطة الكتاب') : 'أنشطة المهمة'}</h3>
                 {hasPrefill && !preview && <button className="btn sm" onClick={applyPrefill} disabled={!products}><Icon name="folder" size={16} /> استرجاع من منتجاتي السابقة</button>}
               </div>
               <Worksheet {...wsProps} sections={a.worksheet.sections}
@@ -267,7 +267,7 @@ export function ActivityView({ lesson, activity: a, catalog, status, preview, po
               {a.independent && !submitted ? (
                 <button className="btn accent" onClick={() => setConfirmSubmit(true)} disabled={busy}><Icon name="check" size={18} /> {submitLabel}</button>
               ) : status === 'completed' ? (
-                nextId ? <button className="btn primary" onClick={() => { save(); onNavigate(nextId); }}>التالي <Icon name="arrowL" size={18} /></button> : <span className="badge ok">اكتملت الحصة</span>
+                nextId ? <button className="btn primary" onClick={() => { save(); onNavigate(nextId); }}>التالي <Icon name="arrowL" size={18} /></button> : <span className="badge ok">{lesson.kind === 'book' ? 'اكتمل هذا القسم' : 'اكتملت الحصة'}</span>
               ) : (
                 <button className="btn primary" onClick={complete} disabled={busy}>{busy ? 'جارٍ التحقق...' : a.completeLabel ?? (nextId ? 'إكمال المهمة والانتقال' : 'إكمال المهمة')} <Icon name="arrowL" size={18} /></button>
               )}

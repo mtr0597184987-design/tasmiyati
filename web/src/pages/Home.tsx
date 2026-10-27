@@ -15,6 +15,38 @@ export interface Catalog {
     progress: { done: number; total: number; current: null | { id: string; title: string; stage: number; homework?: boolean } };
   }[];
   ai: { mode: 'live' | 'demo' | 'off' };
+  sections?: BookSection[];
+}
+export interface BookSection {
+  id: string; title: string; place: 'intro' | 'lesson' | 'outro'; courseLesson: number; overview: string; bookPages: string; enabled: boolean;
+  activities: { id: string; title: string; pages: string; test: boolean; status: string }[];
+}
+
+/** قسم من كتاب الطالبة خارج الحصص التسع */
+function SectionCard({ s }: { s: BookSection }) {
+  const done = s.activities.filter((a) => a.status === 'completed').length;
+  return (
+    <section className={`card book-section ${s.enabled ? '' : 'disabled'}`}>
+      <div className="row between" style={{ alignItems: 'flex-start' }}>
+        <div>
+          <div className="eyebrow-book"><Icon name="book" size={15} /> من كتاب الطالبة · ص {s.bookPages}</div>
+          <h3 style={{ margin: '2px 0 4px' }}>{s.title}</h3>
+          {s.overview && <p className="small muted" style={{ margin: 0 }}>{s.overview}</p>}
+        </div>
+        {s.enabled ? <span className="small muted">{done} / {s.activities.length}</span> : <span className="badge"><Icon name="lock" size={13} /> أوقفته المعلمة</span>}
+      </div>
+      {s.enabled && (
+        <div className="book-links">
+          {s.activities.map((a) => (
+            <a key={a.id} className={`book-link ${a.status === 'completed' ? 'done' : ''}`} href={href(`lesson/${s.id}/${a.id}`)}>
+              {a.status === 'completed' ? <Icon name="check" size={15} /> : a.test ? <Icon name="edit" size={15} /> : <Icon name="book" size={15} />}
+              <span>{a.title}</span><span className="tiny muted">ص {a.pages}</span>
+            </a>
+          ))}
+        </div>
+      )}
+    </section>
+  );
 }
 
 export function Home() {
@@ -52,7 +84,7 @@ export function Home() {
               <>
                 <div className="small muted">مهمتكِ الحالية</div>
                 <h2 style={{ margin: '4px 0' }}>{current.progress.current.title}</h2>
-                <p className="small" style={{ opacity: .9 }}>الحصة {current.number}: {current.title}<br />{current.progress.current.homework ? 'النشاط البيتي' : `المرحلة ${stage?.id}: ${stage?.name}`}</p>
+                <p className="small" style={{ opacity: .9 }}>الحصة {current.number}: {current.title}<br />{current.progress.current.homework ? 'النشاط المنزلي' : `المرحلة ${stage?.id}: ${stage?.name}`}</p>
                 <div style={{ margin: '10px 0 14px' }}><Progress value={current.progress.done} total={current.progress.total} /></div>
                 <a className="btn primary lg" href={href(`lesson/${current.id}/${current.progress.current.id}`)}>متابعة التعلم <Icon name="arrowL" size={18} /></a>
               </>
@@ -71,6 +103,7 @@ export function Home() {
           </div>
         </section>
 
+        {(cat.sections ?? []).filter((x) => x.place === 'intro').map((x) => <SectionCard key={x.id} s={x} />)}
         {groups.map((g) => (
           <section key={g.n} className="course-group">
             <h2>الدرس المقرر {['', 'الأول', 'الثاني', 'الثالث'][g.n]}: <span>{g.title}</span></h2>
@@ -96,8 +129,10 @@ export function Home() {
                   : <div key={l.id} className="card lesson-card disabled" aria-disabled="true">{inner}</div>;
               })}
             </div>
+            {(cat.sections ?? []).filter((x) => x.place === 'lesson' && x.courseLesson === g.n).map((x) => <SectionCard key={x.id} s={x} />)}
           </section>
         ))}
+        {(cat.sections ?? []).filter((x) => x.place === 'outro').map((x) => <SectionCard key={x.id} s={x} />)}
         <section className="card soft">
           <div className="card-title"><Icon name="info" /> خطوات «تسمياتي» السبع في كل حصة</div>
           <div className="row" style={{ gap: 8 }}>

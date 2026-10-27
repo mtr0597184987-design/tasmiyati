@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../api';
 import { Icon } from '../icons';
 import { go } from '../router';
-import { Alert, ErrorBox, Loading, Modal, fmtDate, useApp, taskNo } from '../ui';
+import { Alert, ErrorBox, Loading, Modal, fmtDate, useApp, taskNo, unitLabel } from '../ui';
 
 export interface ScaleLevel { value: number; label: string }
 export interface Criterion { id: string; text: string }
@@ -108,12 +108,12 @@ export function Ratings() {
               setLessonId(e.target.value);
               setActivityId(catalog.find((l) => l.id === e.target.value)?.activities[0]?.id ?? '');
             }}>
-              {catalog.map((l) => <option key={l.id} value={l.id}>الحصة {l.number}</option>)}
+              {catalog.map((l) => <option key={l.id} value={l.id}>{unitLabel(l)}</option>)}
             </select>
           </label>
           <label className="small row grow">النشاط:
             <select className="input" style={{ minHeight: 36 }} value={activityId} onChange={(e) => setActivityId(e.target.value)}>
-              {lesson?.activities.map((a: any) => <option key={a.id} value={a.id}>{a.homework ? 'النشاط البيتي: ' : a.book ? `من الكتاب (ص ${a.book.pages}): ` : `(${taskNo(a.id)}) `}{a.title}</option>)}
+              {lesson?.activities.map((a: any) => <option key={a.id} value={a.id}>{a.homework ? 'النشاط المنزلي: ' : a.book ? `من الكتاب (ص ${a.book.pages}): ` : `(${taskNo(a.id)}) `}{a.title}</option>)}
             </select>
           </label>
         </div>

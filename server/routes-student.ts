@@ -3,7 +3,7 @@ import { productText } from '../shared/outline.ts';
 import { route, HttpError } from './http.ts';
 import { all, get, parse, run } from './db.ts';
 import { clearCookie, clearFailures, makeToken, rateLimited, recordFailure, sessionCookie, verifyPassword } from './auth.ts';
-import { activityFields, findActivity, lessonForStudent, loadContent, allLessons } from './content.ts';
+import { activityFields, findActivity, lessonForStudent, loadContent, allLessons, allSections } from './content.ts';
 import {
   activityStatuses, appSettings, assertAccessible, completeActivity, getArtifact, getLessonOr404, getValues, independentInProgress,
   latestProducts, lessonEnabled, markOpened, missingRequirements, revealedSet, saveRevised, saveValues, selfAssessment, selfAssessmentComplete, submitIndependent,
@@ -61,7 +61,17 @@ route('GET', '/api/catalog', 'any', (c) => {
       durationMinutes: l.durationMinutes, finalOutput: l.finalOutput, progress,
     };
   });
+  // أقسام كتاب الطالبة خارج الحصص التسع
+  const sections = allSections().map((l) => {
+    const st = c.user!.role === 'student' ? activityStatuses(c.user!.id, l) : {};
+    return {
+      id: l.id, title: l.title, place: l.place, courseLesson: l.courseLesson.number, overview: l.overview ?? '', bookPages: l.bookPages ?? '',
+      enabled: lessonEnabled(l.id),
+      activities: l.activities.map((a) => ({ id: a.id, title: a.title, pages: a.book?.pages ?? '', test: !!a.book?.test, status: (st as any)[a.id] ?? 'available' })),
+    };
+  });
   return {
+    sections,
     stages: content.stages.map(({ assistantFunction, ...s }) => (c.user!.role === 'teacher' ? { ...s, assistantFunction } : s)),
     skills: content.skills,
     domains: content.domains,

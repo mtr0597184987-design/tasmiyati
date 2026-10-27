@@ -37,7 +37,7 @@ function studentSummary(sid: number, lessons: Lesson[]) {
   const perLesson: Record<string, { completed: number; started: number; total: number }> = {};
   for (const l of lessons) {
     const st = activityStatuses(sid, l);
-    const vals = l.activities.filter((a) => !a.book).map((a) => st[a.id]); // اكتمال الحصة: الخطوات السبع والنشاط البيتي
+    const vals = l.activities.filter((a) => !a.book).map((a) => st[a.id]); // اكتمال الحصة: الخطوات السبع والنشاط المنزلي
     const c = vals.filter((x) => x === 'completed').length;
     perLesson[l.id] = { completed: c, started: vals.filter((x) => x === 'in_progress').length, total: vals.length };
     done += c; total += vals.length;

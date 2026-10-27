@@ -1,7 +1,7 @@
 // منطق التعلم: التقدم وضبط الانتقال، والإجابات، والمتطلبات، والإنتاج المستقل، والتقويم.
 import type { Activity, ActivityStatus, AppSettings, Field, Lesson } from '../shared/types.ts';
 import { all, get, getSetting, parse, run, tx } from './db.ts';
-import { activityFields, allLessons, getLesson } from './content.ts';
+import { activityFields, allLessons, allUnits, getLesson, isSection } from './content.ts';
 import { HttpError } from './http.ts';
 import { outlineStats, parsePlanner, parseTable, plannerStats, wordCount, paragraphCount } from '../shared/outline.ts';
 
@@ -17,6 +17,7 @@ export function appSettings(): AppSettings {
 
 export function lessonEnabled(lessonId: string): boolean {
   const r = get('SELECT enabled FROM lesson_state WHERE lesson_id = ?', lessonId);
+  if (!r && isSection(lessonId)) return true; // أقسام الكتاب متاحة ما لم توقفها المعلمة
   return !!r?.enabled;
 }
 
@@ -152,7 +153,7 @@ export function revealedSet(studentId: number, lesson: Lesson): Set<string> {
 
 // ---------- المنتجات ----------
 export function lessonOf(activityId: string): string {
-  return allLessons().find((l) => l.activities.some((a) => a.id === activityId))?.id ?? '';
+  return allUnits().find((l) => l.activities.some((a) => a.id === activityId))?.id ?? '';
 }
 export function getArtifact(studentId: number, lessonId: string, version: 'initial' | 'revised') {
   const r = get('SELECT * FROM artifacts WHERE student_id = ? AND lesson_id = ? AND version = ?', studentId, lessonId, version);

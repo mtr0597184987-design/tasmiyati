@@ -49,7 +49,7 @@ export function LessonPage({ lessonId, activityId }: { lessonId: string; activit
   let current = acts.find((a) => a.id === activityId) ?? (preview ? acts[0] : firstOpen);
   if (!preview && statuses[current.id] === 'locked') current = firstOpen;
   const idx = acts.indexOf(current);
-  const coreActs = acts.filter((a) => !a.book); // التقدم في الحصة: الخطوات السبع والنشاط البيتي
+  const coreActs = acts.filter((a) => !a.book); // التقدم في الحصة: الخطوات السبع والنشاط المنزلي
   const done = coreActs.filter((a) => statuses[a.id] === 'completed').length;
   const book = acts.filter((a) => a.book);
   const stageActs = current.book ? book : acts.filter((a) => !a.homework && !a.book && !current.homework && a.stage === current.stage);
@@ -59,6 +59,49 @@ export function LessonPage({ lessonId, activityId }: { lessonId: string; activit
   const hwTarget = hw.find((a) => statuses[a.id] !== 'completed' && statuses[a.id] !== 'locked') ?? hw[0];
   const hwLocked = !preview && hw.length > 0 && hw.every((a) => statuses[a.id] === 'locked');
   const nav = (id: string) => go(`lesson/${lesson.id}/${id}`);
+
+  // قسم من كتاب الطالبة خارج الحصص التسع: لا شريط مراحل، بل أجزاء الكتاب بالترتيب
+  if (lesson.kind === 'book') {
+    const bdone = acts.filter((a) => statuses[a.id] === 'completed').length;
+    return (
+      <>
+        <TopBar>{back}{!preview && <AiBadge mode={cat.ai.mode} />}</TopBar>
+        <main className="container">
+          {preview && <div className="alert warn" style={{ marginBottom: 14 }}><Icon name="eye" size={18} /><div><b>معاينة المعلمة:</b> تعرضين هذا القسم كما تراه الطالبة. لا تُحفظ أي إجابات في وضع المعاينة.</div></div>}
+          <div className="lesson-head">
+            <div>
+              <div className="eyebrow-book"><Icon name="book" size={15} /> من كتاب الطالبة · الوحدة التدريبية الرابعة «مهارات الكتابة» · خارج الحصص التسع{lesson.courseLesson.title ? ` · الدرس المقرر: ${lesson.courseLesson.title}` : ''}</div>
+              <h1>{lesson.title}</h1>
+              {lesson.overview && <p className="muted" style={{ marginTop: 0 }}>{lesson.overview}</p>}
+            </div>
+            {!preview && (
+              <div style={{ minWidth: 220 }}>
+                <div className="small muted" style={{ marginBottom: 4 }}>أنجزتِ {bdone} من {acts.length}</div>
+                <Progress value={bdone} total={acts.length} label="تقدمكِ في هذا القسم" />
+              </div>
+            )}
+          </div>
+          {acts.length > 1 && (
+            <div className="activity-tabs" role="tablist" aria-label="أجزاء القسم">
+              {acts.map((a) => (
+                <button key={a.id} className="activity-tab" role="tab" aria-current={a.id === current.id} onClick={() => nav(a.id)}>
+                  {statuses[a.id] === 'completed' ? <Icon name="check" size={15} /> : null}
+                  ص {a.book?.pages}: {a.title}
+                </button>
+              ))}
+            </div>
+          )}
+          <ActivityView
+            key={current.id}
+            lesson={lesson} activity={current} catalog={cat} status={statuses[current.id] ?? 'available'} preview={preview}
+            position={{ index: idx, total: acts.length, done: bdone }}
+            onCompleted={refreshStatuses}
+            prevId={acts[idx - 1]?.id} nextId={acts[idx + 1]?.id} onNavigate={nav}
+          />
+        </main>
+      </>
+    );
+  }
 
   return (
     <>
@@ -115,7 +158,7 @@ export function LessonPage({ lessonId, activityId }: { lessonId: string; activit
               title={hwLocked ? 'يُتاح بعد إكمال المراحل السبع' : lesson.homeworkTitle} onClick={() => hwTarget && nav(hwTarget.id)}>
               {!preview && hw.every((a) => statuses[a.id] === 'completed') && <span className="tick"><Icon name="check" size={16} stroke={2.6} /></span>}
               <span className="num"><Icon name="home" size={15} /></span>
-              <span className="name">النشاط البيتي</span>
+              <span className="name">النشاط المنزلي</span>
             </button>
           )}
           {book.length > 0 && (

@@ -668,3 +668,12 @@ table.grid.match tr.wrong td { background: var(--accent-soft); }
 .book-image img { max-width: min(100%, 320px); border-radius: 8px; border: 1px solid var(--line); background: #fff; }
 .book-image figcaption { font-size: .85em; color: var(--muted); margin-top: 4px; }
 table.grid td.given { background: var(--surface-2); color: var(--ink); font-size: .95em; }
+
+/* أقسام كتاب الطالبة خارج الحصص */
+.book-section { border-inline-start: 4px solid var(--book); margin: 14px 0; }
+.book-section.disabled { opacity: .7; }
+.eyebrow-book { color: var(--book); font-weight: 700; font-size: .85em; display: flex; align-items: center; gap: 6px; }
+.book-links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.book-link { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); text-decoration: none; }
+.book-link:hover { border-color: var(--book); }
+.book-link.done { background: var(--book-soft); }

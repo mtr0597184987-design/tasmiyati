@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../api';
 import { Icon } from '../icons';
 import { href } from '../router';
-import { Alert, ErrorBox, Loading, Modal, useApp, taskNo } from '../ui';
+import { Alert, ErrorBox, Loading, Modal, useApp, taskNo, unitLabel } from '../ui';
 
 export function Content() {
   const { toast } = useApp();
@@ -31,8 +31,8 @@ export function Content() {
         <section key={l.id} className="card">
           <div className="row between">
             <div>
-              <h3 style={{ margin: 0 }}>الحصة {l.number}: {l.title}</h3>
-              <div className="small muted">الدرس المقرر {l.courseLesson.number}: {l.courseLesson.title} · المهارات: {l.skills.join('، ')}{l.reinforcedSkills.length ? ` · تعزيز: ${l.reinforcedSkills.join('، ')}` : ''}{l.integratedSkills?.length ? ` · تكامل: ${l.integratedSkills.join('، ')}` : ''}</div>
+              <h3 style={{ margin: 0 }}>{unitLabel(l, true)}</h3>
+              {l.kind === 'book' ? <div className="small muted">من كتاب الطالبة، خارج الحصص التسع{l.courseLesson.number ? ` · الدرس المقرر ${l.courseLesson.number}: ${l.courseLesson.title}` : ''} · ص {l.bookPages}. متاح للطالبات ما لم توقفيه.</div> : <div className="small muted">الدرس المقرر {l.courseLesson.number}: {l.courseLesson.title} · المهارات: {l.skills.join('، ')}{l.reinforcedSkills.length ? ` · تعزيز: ${l.reinforcedSkills.join('، ')}` : ''}{l.integratedSkills?.length ? ` · تكامل: ${l.integratedSkills.join('، ')}` : ''}</div>}
             </div>
             <div className="row">
               {l.status === 'draft' ? <span className="badge">مسودة — لم يُعدّ محتواها</span> : (
@@ -55,8 +55,8 @@ export function Content() {
                 <tbody>
                   {l.activities.map((a: any) => (
                     <tr key={a.id}>
-                      <td>{a.homework ? 'النشاط البيتي: ' : a.book ? `من الكتاب (ص ${a.book.pages}): ` : `(${taskNo(a.id)}) `}{a.title}</td>
-                      <td className="small">{a.homework ? 'بيتي' : a.book ? (a.book.test ? 'كتاب: اختبار' : 'كتاب') : a.stage}</td>
+                      <td>{a.homework ? 'النشاط المنزلي: ' : a.book ? `من الكتاب (ص ${a.book.pages}): ` : `(${taskNo(a.id)}) `}{a.title}</td>
+                      <td className="small">{a.homework ? 'منزلي' : a.book ? (a.book.test ? 'كتاب: اختبار' : 'كتاب') : a.stage}</td>
                       <td className="small">{a.assistant.name}{l.overridden.includes(a.id) && <span className="badge info" style={{ marginInlineStart: 4 }}>معدّل</span>}</td>
                       <td className="small">{a.skills.join('، ')}</td>
                       <td className="small ltr" style={{ textAlign: 'right' }}>{a.motivation.join(' ')}</td>

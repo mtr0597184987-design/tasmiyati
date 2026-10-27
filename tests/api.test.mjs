@@ -91,8 +91,7 @@ test('نسخة الطالبة لا تتضمن مفاتيح الإجابة ولا
   assert.ok(!raw.includes('أحسنتِ. هذا موضوع محدد ينطلق من المشكلة')); // تغذية راجعة لبديل
   assert.ok(!raw.includes('ولا تقترحي عليها موضوعًا بديلًا')); // تعليمات زر المساعد
   assert.ok(raw.includes('"checkable":true'));
-  assert.equal(Object.keys(r.data.statuses).length, 12); // سبع مهمات ونشاط بيتي وأربعة أجزاء من كتاب الطالبة
-  for (const k of ['1-K1', '1-K2', '1-K3', '1-K4']) assert.equal(r.data.statuses[k], 'available', 'أنشطة الكتاب متاحة طوال الحصة');
+  assert.equal(Object.keys(r.data.statuses).length, 8); // سبع مهمات ونشاط منزلي؛ أنشطة الكتاب العامة خارج الحصص
   assert.equal(r.data.statuses['1-1'], 'available');
   assert.equal(r.data.statuses['1-2'], 'locked');
   const l = r.data.lesson;
@@ -108,20 +107,27 @@ test('الحصة غير المتاحة مغلقة أمام الطالبة', asyn
   assert.equal((await s1.get('/api/lessons/L02')).status, 403);
 });
 
-test('أنشطة كتاب الطالبة: متاحة دون ترتيب، والمساعد متوقف في الاختبارات، والإكمال بالمتطلبات', async () => {
-  const k3 = await s1.get('/api/activities/1-K3');
+test('أقسام كتاب الطالبة خارج الحصص: متاحة دون إتاحة، والمساعد متوقف في الاختبارات، والإكمال بالمتطلبات', async () => {
+  const cat = (await s1.get('/api/catalog')).data;
+  assert.deepEqual(cat.sections.map((x) => x.id), ['UI', 'UD1', 'UD3', 'UO']);
+  assert.ok(cat.sections.every((x) => x.enabled));
+  assert.equal(cat.lessons.length, 9);
+  const l7 = (await s1.get('/api/lessons/UI')).data;
+  assert.equal(l7.lesson.kind, 'book');
+  for (const k of ['UI-K1', 'UI-K2', 'UI-K3']) assert.equal(l7.statuses[k], 'available');
+  const k3 = await s1.get('/api/activities/UI-K3');
   assert.equal(k3.status, 200);
   assert.equal(k3.data.chatBlocked, 'independent');
-  assert.equal((await s1.post('/api/activities/1-K3/chat', { message: 'ساعديني' })).status, 423);
-  assert.equal((await s1.post('/api/activities/1-K1/complete')).status, 400, 'المتطلبات أولًا');
-  await s1.put('/api/activities/1-K1/responses', { values: { unitHope: 'أن أنظم أفكاري قبل الكتابة' } });
-  assert.equal((await s1.post('/api/activities/1-K1/complete')).status, 200);
+  assert.equal((await s1.post('/api/activities/UI-K3/chat', { message: 'ساعديني' })).status, 423);
+  assert.equal((await s1.post('/api/activities/UI-K1/complete')).status, 400, 'المتطلبات أولًا');
+  await s1.put('/api/activities/UI-K1/responses', { values: { unitHope: 'أن أنظم أفكاري قبل الكتابة' } });
+  assert.equal((await s1.post('/api/activities/UI-K1/complete')).status, 200);
   // خلايا الجدول المعطاة في الكتاب لا تُطلب من الطالبة
-  await s1.put('/api/activities/1-K4/responses', { values: { genreFit: { r3: { c1: 'قصة' }, r4: { c1: 'مقال' }, r5: { c1: 'رسالة' } } } });
-  const st = (await s1.get('/api/lessons/L01')).data.statuses;
-  assert.equal(st['1-K1'], 'completed');
-  const lesson = (await s1.get('/api/lessons/L01')).data.lesson;
-  const k4 = lesson.activities.find((a) => a.id === '1-K4');
+  await s1.put('/api/activities/UD1-K1/responses', { values: { genreFit: { r3: { c1: 'قصة' }, r4: { c1: 'مقال' }, r5: { c1: 'رسالة' } } } });
+  const st = (await s1.get('/api/lessons/UI')).data.statuses;
+  assert.equal(st['UI-K1'], 'completed');
+  const lesson = (await s1.get('/api/lessons/UD1')).data.lesson;
+  const k4 = lesson.activities.find((a) => a.id === 'UD1-K1');
   assert.equal(k4.book.pages, '155–157');
   assert.ok(!JSON.stringify(lesson).includes('answerKey'));
 });
@@ -212,7 +218,7 @@ test('التقويم والتحسين بمستويين: التقويم الذا�
   r = await s1.put('/api/activities/1-7/revised', { values: { domain: 'الرياضة', topic: 'أثر المشي اليومي في تركيز طالبات الصف الأول الثانوي', goal: 'التوعية', audience: 'طالبات الصف الأول الثانوي', genre: 'المقال', reason: 'متسق' } });
   assert.equal(r.status, 200);
   assert.equal((await s1.post('/api/activities/1-7/complete')).status, 200);
-  // النشاط البيتي بعد المراحل السبع
+  // النشاط المنزلي بعد المراحل السبع
   const hw = await s1.get('/api/activities/1-H');
   assert.equal(hw.status, 200);
   assert.equal((await s1.post('/api/activities/1-H/complete')).status, 400);

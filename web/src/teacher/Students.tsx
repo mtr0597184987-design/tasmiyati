@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../api';
 import { Icon } from '../icons';
 import { go } from '../router';
-import { Alert, ErrorBox, Loading, fmtDate, useApp, taskNo } from '../ui';
+import { Alert, ErrorBox, Loading, fmtDate, useApp, taskNo, unitLabel } from '../ui';
 
 const STATUS_LABEL: Record<string, string> = { completed: 'مكتمل', in_progress: 'قيد الإنجاز', available: 'متاح', locked: 'مقفل' };
 
@@ -50,7 +50,7 @@ export function Students() {
           <div className="card-title" style={{ margin: 0 }}><Icon name="users" /> متابعة التقدم في الأنشطة</div>
           <label className="row small">الحصة:
             <select className="input" style={{ width: 'auto', minHeight: 36 }} value={lessonId} onChange={(e) => setLessonId(e.target.value)}>
-              {d.lessons.map((l: any) => <option key={l.id} value={l.id}>الحصة {l.number}</option>)}
+              {d.lessons.map((l: any) => <option key={l.id} value={l.id}>{unitLabel(l)}</option>)}
             </select>
           </label>
         </div>

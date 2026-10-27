@@ -39,9 +39,9 @@ for (const g of guide) {
   });
   const hw = L.activities.filter((a) => a.homework);
   if (g.homework) {
-    need(g.homework.title, 'عنوان النشاط البيتي');
+    need(g.homework.title, 'عنوان النشاط المنزلي');
     g.homework.followup.forEach((f, i) => { checked++; if (hw[0]?.teacherProcedures?.[i] !== f) { missing++; report.push(`✗ متابعة المعلمة ${i + 1} في الحصة ${g.number}`); } });
-    g.homework.tasks.forEach((t) => { need(t.title, 'عنوان مهمة بيتية'); t.parts.forEach((p) => p.p && need(p.p, 'نص مهمة بيتية')); });
+    g.homework.tasks.forEach((t) => { need(t.title, 'عنوان مهمة منزلية'); t.parts.forEach((p) => p.p && need(p.p, 'نص مهمة منزلية')); });
   }
 }
 console.log(report.join('\n'));
