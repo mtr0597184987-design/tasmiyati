@@ -31,7 +31,7 @@ export function ActivityView({ lesson, activity: a, catalog, status, preview, po
 }) {
   const { me, aiMode, toast, online } = useApp();
   const stage = catalog.stages.find((s) => s.id === a.stage)!;
-  const color = a.book ? 'var(--book)' : STAGE_COLORS[a.stage];
+  const color = a.homework ? 'var(--accent)' : STAGE_COLORS[a.stage];
   const [data, setData] = useState<any>(null);
   const [error, setError] = useState('');
   const [values, setValues] = useState<Record<string, any>>({});
@@ -144,7 +144,7 @@ export function ActivityView({ lesson, activity: a, catalog, status, preview, po
     try {
       if (!(await save())) { toast('تعذّر حفظ إجاباتكِ على الخادم. هي محفوظة على هذا الجهاز؛ حاولي مرة أخرى عند عودة الاتصال.', 'error'); return; }
       await api(`/api/activities/${a.id}/complete`, { body: {} });
-      toast(`${a.homework ? 'أنجزتِ النشاط المنزلي، وحُفظ عملكِ.' : a.book ? `أحسنتِ؛ أنجزتِ صفحات الكتاب (${a.book.pages}) في هذه المرحلة.` : STAGE_PRAISE[a.stage]} (أنجزتِ ${position.done + (status === 'completed' ? 0 : 1)} من ${position.total} في هذه الحصة)`, 'ok');
+      toast(`${a.homework ? 'أنجزتِ النشاط المنزلي، وحُفظ عملكِ.' : a.book?.test ? 'أنهيتِ الاختبار، وحُفظت إجاباتكِ.' : STAGE_PRAISE[a.stage]} (أنجزتِ ${position.done + (status === 'completed' ? 0 : 1)} من ${position.total} في هذه الحصة)`, 'ok');
       await onCompleted();
       if (nextId) onNavigate(nextId);
     } catch (e: any) {
@@ -189,7 +189,7 @@ export function ActivityView({ lesson, activity: a, catalog, status, preview, po
     <div className="pane-work">
       <div className="card">
         <header className="activity-header" style={{ ['--c' as any]: color }}>
-          <div className="eyebrow">{a.book && lesson.kind === 'book' ? <>من كتاب الطالبة · {a.book.part} · ص {a.book.pages}</> : a.book && a.homework ? <>النشاط المنزلي · من كتاب الطالبة · ص {a.book.pages}</> : a.book ? <>المرحلة {ORD[stage.id]}: {stage.name} · من كتاب الطالبة: {a.book.part} · ص {a.book.pages}</> : a.homework ? <>النشاط المنزلي{lesson.homeworkTitle ? `: ${lesson.homeworkTitle}` : ''}</> : <>المرحلة {ORD[stage.id]}: {stage.name} · المهمة ({taskNo(a.id)}){a.minutes ? ` · ${a.minutes} ${a.minutes > 10 ? 'دقيقة' : 'دقائق'}` : ''}</>}</div>
+          <div className="eyebrow">{a.homework ? <>النشاط المنزلي{lesson.homeworkTitle ? `: ${lesson.homeworkTitle}` : ''}{a.book && !(a.book as any).supportive ? ` · من كتاب الطالبة ص ${a.book.pages}` : ''}</> : <>المرحلة {ORD[stage.id]}: {stage.name} · المهمة ({taskNo(a.id)}){a.book ? ` · كتاب الطالبة ص ${a.book.pages}` : ''}{a.minutes ? ` · ${a.minutes} ${a.minutes > 10 ? 'دقيقة' : 'دقائق'}` : ''}</>}</div>
           <h2>{a.title}</h2>
           {a.goal && <div className="goal"><b>هدف المهمة: </b>{a.goal}</div>}
           <div className="skill-pills">
@@ -199,9 +199,9 @@ export function ActivityView({ lesson, activity: a, catalog, status, preview, po
         </header>
 
         <details className="box" style={{ marginBottom: 14 }}>
-          <summary><span><Icon name="list" size={16} /> {a.homework ? 'ماذا سأفعل في النشاط المنزلي؟' : a.book ? 'ماذا سأفعل هنا؟' : 'ماذا سأفعل في هذه المهمة؟'}</span><Icon name="down" size={16} /></summary>
+          <summary><span><Icon name="list" size={16} /> {a.homework ? 'ماذا سأفعل في النشاط المنزلي؟' : 'ماذا سأفعل في هذه المهمة؟'}</span><Icon name="down" size={16} /></summary>
           <div className="body">
-            {a.studentProcedures.length > 0 && <><h4 style={{ marginTop: 0 }}>{a.homework ? 'خطواتي في النشاط المنزلي' : a.book ? 'خطواتي' : 'إجراءات التنفيذ المرتبطة بالطالبة'}</h4><ol style={{ margin: 0 }}>{a.studentProcedures.map((p, i) => <li key={i}>{p}</li>)}</ol></>}
+            {a.studentProcedures.length > 0 && <><h4 style={{ marginTop: 0 }}>{a.homework ? 'خطواتي في النشاط المنزلي' : 'خطواتي في المهمة'}</h4><ol style={{ margin: 0 }}>{a.studentProcedures.map((p, i) => <li key={i}>{p}</li>)}</ol></>}
             {a.teacherProcedures && (
               <>
                 <h4 style={{ marginTop: 12 }}>{a.homework ? 'متابعة المعلمة وتقويم النشاط المنزلي' : 'إجراءات التنفيذ المرتبطة بالمعلمة'}</h4>

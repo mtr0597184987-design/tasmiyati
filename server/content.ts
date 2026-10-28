@@ -5,7 +5,7 @@ import type { Activity, Lesson, MotivationDimension, Rubric, Skill, StrategyStag
 import { all, get, parse } from './db.ts';
 
 /** يُرفع عند استبدال بنية الحصص؛ تُمسح عندها تعديلات المعلمة المرتبطة بأنشطة البنية القديمة */
-export const CONTENT_VERSION = 2;
+export const CONTENT_VERSION = 3;
 
 export const CONTENT_DIR = process.env.CONTENT_DIR || path.resolve(process.cwd(), 'content');
 
@@ -170,11 +170,13 @@ export function validateContent(): { errors: string[]; warnings: string[] } {
     for (let s = 1; s <= 7; s++) if (!stages.includes(s as any)) errors.push(`${l.id}: الخطوة ${s} غير موجودة.`);
     for (let i = 1; i < stages.length; i++) if (stages[i] < stages[i - 1]) errors.push(`${l.id}: ترتيب الخطوات مخالف عند النشاط ${core[i].id}.`);
     if (!l.rubric) warnings.push(`${l.id}: لا توجد معايير تقويم للحصة.`);
+    if (!l.activities.some((a) => a.stage === 7 && a.evaluation?.sourceActivity && l.activities.some((x) => x.id === a.evaluation!.sourceActivity && x.independent))) errors.push(`${l.id}: خطوة التقويم يجب أن تحدد المنتج المستقل المصدر.`);
+    if (!l.activities.some((a) => a.independent)) errors.push(`${l.id}: لا توجد مهمة إنتاج كتابي مستقل.`);
     for (const a of l.activities) {
       if (seen.has(a.id)) errors.push(`معرف نشاط مكرر ${a.id}`);
       seen.add(a.id);
       if (!a.title) errors.push(`${a.id}: العنوان فارغ.`);
-      if (!a.homework && !a.book && !a.studentProcedures?.length) errors.push(`${a.id}: إجراءات الطالبة فارغة.`);
+      if (!a.homework && !a.studentProcedures?.length) errors.push(`${a.id}: إجراءات الطالبة فارغة.`);
       if (!a.assistant?.name || !a.assistant.opening) errors.push(`${a.id}: تعليمات المساعد ناقصة.`);
       for (const s of a.skills) if (!l.skills.includes(s) && !l.reinforcedSkills.includes(s) && !(l.integratedSkills ?? []).includes(s)) errors.push(`${a.id}: المهارة ${s} ليست من مهارات الحصة.`);
       for (const m of a.motivation) if (!indicatorIds.has(m)) errors.push(`${a.id}: مؤشر دافعية غير معتمد ${m}.`);
@@ -182,8 +184,8 @@ export function validateContent(): { errors: string[]; warnings: string[] } {
       if (fids.size !== activityFields(a).length) errors.push(`${a.id}: معرف حقل مكرر.`);
       for (const f of activityFields(a)) if (f.answerKey != null && !['choice', 'select', 'multi', 'classify', 'ordering', 'table'].includes(f.type)) errors.push(`${a.id}/${f.id}: مفتاح إجابة لنوع لا يُفحص.`);
       for (const r of a.requirements.fields) if (!fids.has(r)) errors.push(`${a.id}: متطلب لحقل غير موجود ${r}.`);
-      if (!a.homework && !a.book && a.stage === 6 && (!a.independent || a.assistant.mode !== 'disabled')) errors.push(`${a.id}: خطوة الإنتاج المستقل يجب أن تعطّل المساعد التوليدي.`);
-      if (!a.homework && !a.book && a.stage === 7 && !a.evaluation) errors.push(`${a.id}: خطوة التقويم يجب أن تحدد المنتج المستقل المصدر.`);
+      if (!a.homework && a.stage === 6 && (!a.independent || a.assistant.mode !== 'disabled')) errors.push(`${a.id}: خطوة الإنتاج المستقل يجب أن تعطّل المساعد التوليدي.`);
+
       for (const p of a.showProducts ?? []) if (!c.lessons.some((x) => x.id === p && x.number < l.number) && p !== l.id) errors.push(`${a.id}: منتج غير معروف أو لاحق ${p}.`);
       for (const f of activityFields(a)) for (const p of f.prefill ?? []) if (!(a.homework && p.lesson === l.id) && !c.lessons.some((x) => x.id === p.lesson && x.number < l.number)) errors.push(`${a.id}/${f.id}: استرجاع من حصة غير سابقة ${p.lesson}.`);
     }

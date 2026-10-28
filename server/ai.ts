@@ -122,9 +122,15 @@ export function buildSystemPrompt(lesson: Lesson, a: Activity, values: Record<st
       if (it.type === 'table') return it.rows.map((r) => r.join(' | ')).join('\n');
       if (it.type === 'material') return matText(it.material);
       if (it.type === 'diagram') return `${it.title ?? 'مخطط نموذجي'}:\n${plannerText(it.value)}`;
+      if (it.type === 'box') return `${it.title ? it.title + '\n' : ''}${it.items.map((x) => `- ${x.replace(/^– /, '  ')}`).join('\n')}`;
+      if (it.type === 'passage') return `نص من الكتاب${it.title ? ` بعنوان «${it.title}»` : ''}:\n${it.text}${it.source ? `\n(${it.source})` : ''}`;
+      if (it.type === 'image') return `[صورة: ${it.alt}]`;
       return '';
     }).filter(Boolean);
-    const fields = sec.fields.map((f) => `  • حقل: ${f.label}${(f.options ?? []).length ? ` (البدائل: ${(f.options ?? []).map((o) => (typeof o === 'string' ? o : o.text)).join('، ')})` : ''}`).join('\n');
+    const fields = sec.fields.map((f) => {
+      const given = f.given ? Object.entries(f.given).flatMap(([r, cols]) => Object.entries(cols).map(([c, v]) => `${f.rows?.find((x) => x.id === r)?.label ?? r} — ${f.columns?.find((x) => x.id === c)?.label ?? c}: ${v}`)) : [];
+      return `  • حقل: ${f.label}${(f.options ?? []).length ? ` (البدائل: ${(f.options ?? []).map((o) => (typeof o === 'string' ? o : o.text)).join('، ')})` : ''}${given.length ? `\n    معطى في الكتاب: ${given.join('؛ ')}` : ''}`;
+    }).join('\n');
     return `### ${sec.number ? `نشاط (${sec.number}): ` : ''}${sec.title}\n${[sec.intro, ...parts].filter(Boolean).join('\n')}${fields ? '\n' + fields : ''}${sec.assist ? `\n  • زر «${sec.assist.label}»: ${sec.assist.message}` : ''}`;
   }).join('\n\n');
 
@@ -153,8 +159,8 @@ ${c.style}
 
 ## سياق النشاط الحالي
 - ${lesson.kind === 'book' ? `قسم من كتاب الطالبة خارج الحصص التسع: ${lesson.title}${lesson.courseLesson.title ? ` (الدرس المقرر: ${lesson.courseLesson.title})` : ''}` : `الحصة ${lesson.number}: ${lesson.title} (الدرس المقرر: ${lesson.courseLesson.title})`}.
-- ${a.book ? `من كتاب الطالبة (${a.book.part}، ص ${a.book.pages})` : a.homework ? 'النشاط المنزلي' : 'المهمة'} (${a.id.replace('-', '\u200F-\u200F')}): ${a.title}.
-${a.book ? '- هذه أنشطة الكتاب المقرر المرتبطة بالحصة، وهي خارج ترتيب الخطوات السبع؛ ساعدي الطالبة على فهم المطلوب وفحص إجابتها بالأسئلة، ولا تجيبي عنها.' : `- خطوة الاستراتيجية: ${stage.id}. ${stage.name} — وظيفتها: ${stage.assistantFunction}`}
+- ${a.homework ? 'النشاط المنزلي' : 'المهمة'} (${a.id.replace('-', '\u200F-\u200F')}): ${a.title}${a.book && !(a.book as any).supportive ? ` — من كتاب الطالبة (الدرس: ${a.book.part}، ص ${a.book.pages})` : ''}.
+- خطوة الاستراتيجية: ${a.homework ? 'نشاط منزلي بعد الخطوات السبع' : `${stage.id}. ${stage.name} — وظيفتها: ${stage.assistantFunction}`}
 ${a.minutes ? `- زمن المهمة: ${a.minutes} دقائق.\n` : ''}${a.goal ? `- هدف النشاط: ${a.goal}` : ''}
 - المهارات المستهدفة: ${a.skills.map((s) => `(${s}) ${skillText(s)}`).join(' ')}
 - مؤشرات الدافعية التي يدعمها أسلوب تفاعلكِ (لا تسألي عنها مباشرة ولا تذكريها للطالبة): ${a.motivation.map(indicatorText).join('؛ ')}

@@ -118,7 +118,7 @@ export function LessonPage({ lessonId, activityId }: { lessonId: string; activit
                   {lesson.objectives?.length ? <><h4>الأهداف التعليمية</h4>{lesson.objectivesIntro && <p className="small" style={{ marginBottom: 4 }}>{lesson.objectivesIntro}</p>}<ol className="small">{lesson.objectives.map((o, i) => <li key={i}>{o}</li>)}</ol></> : null}
                   {lesson.skillsText && <><h4>مهارات الكتابة</h4><p className="small">{lesson.skillsText}</p></>}
                   {lesson.productLabel && lesson.finalOutput && <><h4>{lesson.productLabel}</h4><p className="small">{lesson.finalOutput}</p></>}
-                  {book.length > 0 && <><h4>من كتاب الطالبة</h4><p className="small">الوحدة التدريبية الرابعة «مهارات الكتابة»، الصفحات المدروسة في هذه الحصة: {bookPages(book)}. تجدينها مهماتٍ داخل مراحل الحصة، وعليها علامة الكتاب ورقم الصفحة.</p><ul className="small">{book.map((a) => <li key={a.id}>ص {a.book!.pages}: {a.title} — {a.homework ? 'النشاط المنزلي' : `المرحلة ${a.stage}: ${cat.stages.find((x) => x.id === a.stage)?.name ?? ''}`}</li>)}</ul></>}
+                  {book.length > 0 && <><h4>صفحات الكتاب في هذه الحصة</h4><p className="small">الوحدة التدريبية الرابعة «مهارات الكتابة» · ص {lesson.bookPages ?? bookPages(book)}. تُدرَّس بمراحل «تسمياتي» السبع:</p><ul className="small">{acts.filter((a) => !(a.book as any)?.supportive).map((a) => <li key={a.id}>{a.homework ? 'النشاط المنزلي' : `المرحلة ${a.stage}`}: {a.title}{a.book ? ` (ص ${a.book.pages})` : ''}</li>)}</ul></>}
                 </div>
               </details>
             )}
@@ -166,7 +166,7 @@ export function LessonPage({ lessonId, activityId }: { lessonId: string; activit
             {stageActs.map((a) => (
               <button key={a.id} className="activity-tab" role="tab" aria-current={a.id === current.id} disabled={!preview && statuses[a.id] === 'locked'} onClick={() => nav(a.id)}>
                 {statuses[a.id] === 'completed' ? <Icon name="check" size={15} /> : statuses[a.id] === 'locked' ? <Icon name="lock" size={14} /> : null}
-                {a.book ? <><Icon name="book" size={14} /> ص {a.book.pages}: </> : a.homework ? null : <>({taskNo(a.id)}) </>}{a.title}
+                {a.homework ? null : <>({taskNo(a.id)}) </>}{a.title}{a.book ? <span className="tiny muted"> · ص {a.book.pages}</span> : null}
               </button>
             ))}
           </div>

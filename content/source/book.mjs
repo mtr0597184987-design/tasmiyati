@@ -1,24 +1,24 @@
 // كتاب الطالبة: الوحدة التدريبية الرابعة «كفاية الاتصال الكتابي — مهارات الكتابة» (ص 147–188).
 // تُنقل النصوص القرائية والشروح والجداول حرفيًا، وتُصاغ التعليمات الموجهة إلى الطالبة بخطاب المؤنث.
 // الإجابات الملونة في النسخة المصورة المرفقة ليست من الكتاب، فلا تُنقل.
-// يُدرَّس الكتاب بالاستراتيجية المقترحة: كل جزء مهمة في المرحلة المناسبة له من الحصة (stage)، أو في النشاط المنزلي (homework)،
-// وما عليه before يأتي قبل مهمة الدليل في مرحلته. المهمات بترتيب المراحل، والمساعد بوظيفة مرحلته.
+// هذا الملف مخزن نصوص الكتاب وأنشطته؛ ويركّبها content/source/program.mjs في الحصص التسع بمراحل «تسمياتي» السبع.
+// (مفاتيح الحصص والمراحل هنا مواضعها الأولى فقط، ولا يعتمد عليها البناء.)
 import { area, opt, select, table, text } from './helpers.mjs';
 
-const P = (t) => ({ type: 'p', text: t });
-const BOX = (title, items, extra = {}) => ({ type: 'box', title, items, ...extra });
-const READ = (items) => BOX('اقرئي:', items);
-const PASS = (t, title, source) => ({ type: 'passage', text: t, ...(title ? { title } : {}), ...(source ? { source } : {}) });
-const TBL = (rows) => ({ type: 'table', rows });
-const FIELDS = { type: 'fields' };
-const list = (id, label, min = 3, extra = {}) => ({ id, type: 'list', label, required: true, min, ...extra });
-const ordering = (id, label, items, extra = {}) => ({ id, type: 'ordering', label, required: true, items: items.map((t, i) => ({ id: `s${i + 1}`, text: t })), ...extra });
-const planner = (id, label, extra = {}) => ({ id, type: 'planner', label, required: true, min: 3, ...extra });
-const plannerDefault = (mode, topic) => JSON.stringify({ mode, topic, ideas: [] });
-const REVIEW = 'راجعي إجابتي معي';
+export const P = (t) => ({ type: 'p', text: t });
+export const BOX = (title, items, extra = {}) => ({ type: 'box', title, items, ...extra });
+export const READ = (items) => BOX('اقرئي:', items);
+export const PASS = (t, title, source) => ({ type: 'passage', text: t, ...(title ? { title } : {}), ...(source ? { source } : {}) });
+export const TBL = (rows) => ({ type: 'table', rows });
+export const FIELDS = { type: 'fields' };
+export const list = (id, label, min = 3, extra = {}) => ({ id, type: 'list', label, required: true, min, ...extra });
+export const ordering = (id, label, items, extra = {}) => ({ id, type: 'ordering', label, required: true, items: items.map((t, i) => ({ id: `s${i + 1}`, text: t })), ...extra });
+export const planner = (id, label, extra = {}) => ({ id, type: 'planner', label, required: true, min: 3, ...extra });
+export const plannerDefault = (mode, topic) => JSON.stringify({ mode, topic, ideas: [] });
+export const REVIEW = 'راجعي إجابتي معي';
 
 /** خطوات بناء الموضوع (ص 155) كما وردت في الكتاب */
-const STEPS_TABLE = TBL([
+export const STEPS_TABLE = TBL([
   ['الخطوة', 'ما تتضمنه'],
   ['اختيار الموضوع', 'معلوماتك عنه جيِّدة، أو يمثِّل جزءًا من اهتماماتك، أو يهم القراء، أو لديك إضافات جيِّدة حوله.'],
   ['تحديد الهدف', 'التعبير عن الذات: عاطفة، أو رأي أو إنشاء علاقات اجتماعية ...\nمعالجة معلومات: إضافة - تلخيص - توضيح - إعادة تنظيم ...'],
@@ -30,7 +30,7 @@ const STEPS_TABLE = TBL([
 ]);
 
 /** مهارات بناء الموضوع (ص 163) */
-const SKILLS_TABLE = TBL([
+export const SKILLS_TABLE = TBL([
   ['المهارة', 'خصائصها'],
   ['اختيار العنوان', '- قصير\n- مثير\n- دال على المحتوى'],
   ['بناء المقدّمة', '- قصيرة\n- مشوِّقة\n- تمهِّد للموضوع'],

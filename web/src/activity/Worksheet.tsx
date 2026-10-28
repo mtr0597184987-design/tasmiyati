@@ -56,7 +56,7 @@ export function Worksheet({ activityId, sections, values, onChange, checks, hint
         return (
           <div key={sid} className="section">
             <div className="section-title">
-              <h3 style={{ margin: 0 }}>{s.number ? <span className="act-num">نشاط ({s.number})</span> : null}{s.title}</h3>
+              <h3 style={{ margin: 0 }}>{s.number ? <span className="act-num">نشاط ({s.number})</span> : null}{s.title}{preview && s.proposed ? <span className="proposed-tag">إضافة داعمة ليست من نص الكتاب</span> : null}</h3>
               {!readOnly && (s.hintCount ?? 0) > 0 && setHints && (
                 <HintButton activityId={activityId} section={sid} total={s.hintCount!} shown={hints[sid]?.length ?? 0} policy={s.hintPolicy} onHints={(h) => setHints(sid, h)} />
               )}

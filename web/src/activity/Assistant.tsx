@@ -23,7 +23,7 @@ export function AssistantPanel({ activity, history, blocked, aiMode, stageIcon, 
   const [error, setError] = useState('');
   const box = useRef<HTMLDivElement>(null);
   const as = activity.assistant;
-  const color = activity.book ? 'var(--book)' : STAGE_COLORS[activity.stage];
+  const color = STAGE_COLORS[activity.stage];
 
   useEffect(() => { box.current?.scrollTo({ top: box.current.scrollHeight, behavior: 'smooth' }); }, [msgs, busy]);
   // على الجوال تكون اللوحة مخفية عند التحميل؛ فعند ظهورها ننزل إلى آخر رسالة

@@ -80,7 +80,53 @@ test('الصلاحيات: الطالبة لا تصل إلى لوحة المعل�
   assert.equal((await new Client().post('/api/auth/student', { code: 'WRONG' })).status, 401);
 });
 
-test('نسخة الطالبة لا تتضمن مفاتيح الإجابة ولا التغذية الراجعة للبدائل ولا تعليمات المساعد الداخلية', async () => {
+// ---------- ملء عام لحقول أي مهمة بحسب تعريفها (لاختبار المسار دون الارتباط بنص بعينه) ----------
+const defs = {};
+async function act(c, id) {
+  const L = `L0${id.split('-')[0]}`;
+  defs[L] ??= (await c.get(`/api/lessons/${L}`)).data.lesson;
+  return defs[L].activities.find((a) => a.id === id);
+}
+function fill(f) {
+  const optId = (o) => (typeof o === 'string' ? o : o.id);
+  switch (f.type) {
+    case 'text': return 'نص تجريبي';
+    case 'textarea': {
+      if (f.defaultValue != null) return f.defaultValue + ' (معدّل)';
+      const words = Math.max(f.minWords ?? 0, 5);
+      const para = Array.from({ length: words }, () => 'كلمة').join(' ');
+      return Array.from({ length: Math.max(f.minParagraphs ?? 1, 1) }, () => para).join('\n\n');
+    }
+    case 'choice': case 'select': return optId(f.options[0]);
+    case 'multi': return f.options.slice(0, Math.max(f.min ?? 1, 1)).map(optId);
+    case 'classify': return Object.fromEntries(f.items.map((it) => [it.id, f.categories[0].id]));
+    case 'ordering': return f.items.map((i) => i.id);
+    case 'list': return Array.from({ length: Math.max(f.min ?? 1, 1) }, (_, i) => `عنصر ${i + 1}`);
+    case 'outline': return Array.from({ length: Math.max(f.min ?? 1, 1) }, (_, i) => `${i + 1}. فكرة ${i + 1}\n   - تفصيل`).join('\n');
+    case 'planner': return JSON.stringify({ mode: f.plannerModes?.[0] ?? 'table', topic: 'موضوع', ideas: Array.from({ length: Math.max(f.min ?? 1, 1) }, (_, i) => ({ element: 'العرض', idea: `فكرة ${i + 1}`, details: ['تفصيل'], method: '' })) });
+    case 'table': return Object.fromEntries(f.rows.map((r) => [r.id, Object.fromEntries(f.columns.map((col) => [col.id, (r.options ?? col.options)?.[0] ?? `خلية ${r.id}`]))]));
+    default: return 'نص';
+  }
+}
+function values(a, over = {}) {
+  const v = {};
+  for (const s of a.worksheet.sections) for (const f of s.fields) v[f.id] = fill(f);
+  return { ...v, ...over };
+}
+async function doTask(c, id, over = {}) {
+  const a = await act(c, id);
+  if (a.independent) {
+    const r = await c.post(`/api/activities/${id}/submit`, { values: values(a, over), meta: { pasteCount: 1 } });
+    assert.equal(r.status, 200, `${id}: ${JSON.stringify(r.data)}`);
+    return r;
+  }
+  await c.put(`/api/activities/${id}/responses`, { values: values(a, over) });
+  const r = await c.post(`/api/activities/${id}/complete`);
+  assert.equal(r.status, 200, `${id}: ${JSON.stringify(r.data)}`);
+  return r;
+}
+
+test('نسخة الطالبة لا تتضمن مفاتيح الإجابة ولا تعليمات المساعد الداخلية، والحصة الأولى من الكتاب بمراحلها', async () => {
   const r = await s1.get('/api/lessons/L01');
   assert.equal(r.status, 200);
   const raw = JSON.stringify(r.data);
@@ -88,194 +134,139 @@ test('نسخة الطالبة لا تتضمن مفاتيح الإجابة ولا
   assert.ok(!raw.includes('optionFeedback'));
   assert.ok(!raw.includes('constraints'));
   assert.ok(!raw.includes('teacherProcedures'));
-  assert.ok(!raw.includes('أحسنتِ. هذا موضوع محدد ينطلق من المشكلة')); // تغذية راجعة لبديل
-  assert.ok(!raw.includes('ولا تقترحي عليها موضوعًا بديلًا')); // تعليمات زر المساعد
-  assert.ok(raw.includes('"checkable":true'));
-  assert.equal(Object.keys(r.data.statuses).length, 12); // سبع مهمات ونشاط منزلي وأربعة أجزاء من الكتاب داخل المراحل
-  assert.equal(r.data.statuses['1-K1'], 'available', 'الحصة الأولى تبدأ بدليل الوحدة من الكتاب');
-  assert.equal(r.data.statuses['1-1'], 'locked');
   const l = r.data.lesson;
-  assert.equal(l.title, 'اختيار موضوع الكتابة وتحديد الهدف');
-  assert.deepEqual(l.activities.filter((a) => !a.book).map((a) => a.minutes ?? null), [4, 6, 5, 5, 9, 11, 5, null]);
-  assert.deepEqual(l.activities.map((a) => a.id), ['1-K1', '1-K3', '1-1', '1-2', '1-K2', '1-3', '1-4', '1-5', '1-K4', '1-6', '1-7', '1-H']);
-  assert.ok(l.activities[11].homework);
-  assert.equal(l.activities[2].worksheet.sections[0].title, 'ساعدي سارة على اتخاذ القرار');
-  assert.equal(l.objectives.length, 6);
+  assert.equal(l.title, 'مدخل الوحدة');
+  assert.equal(l.courseLesson.title, 'خطوات بناء الموضوع');
+  assert.deepEqual(l.activities.map((a) => a.id), ['1-1', '1-2', '1-3', '1-4', '1-5', '1-6', '1-7', '1-8', '1-H']);
+  assert.deepEqual(l.activities.map((a) => (a.homework ? 'H' : a.stage)), [1, 1, 2, 3, 4, 5, 6, 7, 'H']);
+  assert.ok(l.activities.every((a) => a.book?.pages), 'كل مهمة مرتبطة بصفحات الكتاب');
+  assert.equal(l.activities[0].title, 'دليل الوحدة');
+  assert.ok(l.activities[1].book.test, 'الاختبار القبلي');
+  assert.ok(l.activities[6].independent);
+  assert.ok(raw.includes('تتبعي الخطوات المناسبة عند كتابة موضوع أو بحث.'), 'نص الكتاب');
   assert.equal(l.rubric.levels.map((x) => x.label).join('|'), 'متحقق|يحتاج إلى تحسين');
+  assert.equal(r.data.statuses['1-1'], 'available');
+  assert.equal(r.data.statuses['1-2'], 'locked');
 });
 
 test('الحصة غير المتاحة مغلقة أمام الطالبة', async () => {
   assert.equal((await s1.get('/api/lessons/L02')).status, 403);
 });
 
-const BOOK_VALUES = {
-  '1-K1': { unitHope: 'أن أنظم أفكاري قبل الكتابة' },
-  '1-K3': {
-    fishPre: JSON.stringify({ mode: 'fishbone', topic: 'سبل حفظ النعمة', ideas: [{ element: '', idea: 'النعمة', details: ['شكرها'], method: '' }, { element: '', idea: 'الهدر', details: ['أسبابه'], method: '' }, { element: '', idea: 'الحلول', details: ['التخطيط'], method: '' }] }),
-    titlesPre: { r1: { c1: 'قصص نابغين' }, r2: { c1: 'أخطاء خطيرة' }, r3: { c1: 'مغامرة' } },
-    introPre: 'نحرص على حفظ الطعام.', reorgPre: 'فقرة أعدتُ تنظيمها.',
-  },
-  '1-K2': {
-    genres: { r2: { c1: 'الشخصيات والأحداث' }, r3: { c1: 'التاريخ والتحية' }, r4: { c1: 'المقدمة والنتائج' } }, prevUnits: 'علامات الترقيم',
-    headings: Array.from({ length: 10 }, (_, i) => `s${i + 1}`), headingsWhy: 'بحسب الفن', srcTopics: { r1: { c1: 'أ' }, r2: { c1: 'ب' }, r3: { c1: 'ج' }, r4: { c1: 'د' }, r5: { c1: 'هـ' } },
-  },
-  '1-K4': {
-    genreFit: { r3: { c1: 'قصة' }, r4: { c1: 'مقال' }, r5: { c1: 'رسالة' } },
-    peerPrefs: Object.fromEntries(['r1', 'r2', 'r3', 'r4', 'r5'].map((r) => [r, { c1: '3', c2: 'المدرسة' }])), peerPrefsShow: 'المقال أولًا',
-    goals: Object.fromEntries(['r1', 'r2', 'r3', 'r4', 'r5'].map((r) => [r, { c1: 'الإقناع' }])),
-  },
-  '2-K1': {
-    club: { r3: { c1: 'الإدارة', c2: 'الهيكل', c3: 'السجلات' }, r4: { c1: 'المالية', c2: 'الدخل', c3: 'المحاسب' } },
-    bestSrc: { r1: { c1: 'الأخبار' }, r2: { c1: 'السكان' }, r3: { c1: 'الإحصاءات' } },
-    canteenInfo: ['النظافة', 'الأسعار', 'الازدحام', 'الأصناف'], canteenHeads: ['النظافة', 'الأسعار', 'الازدحام'],
-    canteenReport: Array.from({ length: 110 }, () => 'كلمة').join(' '), canteenSources: 'المقابلات والملاحظة',
-  },
-};
-async function doBook(c, id) {
-  await c.put(`/api/activities/${id}/responses`, { values: BOOK_VALUES[id] });
-  const r = await c.post(`/api/activities/${id}/complete`);
-  assert.equal(r.status, 200, `${id}: ${JSON.stringify(r.data)}`);
-}
-
-test('أجزاء كتاب الطالبة مهمات داخل مراحل الحصة: بالترتيب، والمساعد متوقف في الاختبار، والخلايا المعطاة لا تُطلب', async () => {
-  const l1 = (await s1.get('/api/lessons/L01')).data;
-  const k = l1.lesson.activities.find((a) => a.id === '1-K1');
-  assert.equal(k.stage, 1);
-  assert.equal(k.book.pages, '147–149');
-  assert.equal(l1.statuses['1-K3'], 'locked', 'الاختبار القبلي بعد دليل الوحدة');
-  assert.equal((await s1.post('/api/activities/1-K1/complete')).status, 400, 'المتطلبات أولًا');
-  await doBook(s1, '1-K1');
-  const k3 = await s1.get('/api/activities/1-K3');
-  assert.equal(k3.status, 200);
-  assert.equal(k3.data.chatBlocked, 'independent');
-  assert.equal((await s1.post('/api/activities/1-K3/chat', { message: 'ساعديني' })).status, 423);
-  await doBook(s1, '1-K3');
-  const st = (await s1.get('/api/lessons/L01')).data.statuses;
-  assert.equal(st['1-1'], 'available', 'ثم مهمة الدليل في مرحلة التحفيز');
-  assert.ok(!JSON.stringify(l1.lesson).includes('answerKey'));
-});
-
-
-test('ضبط الانتقال، والفحص الموضوعي بتغذية راجعة لكل بديل', async () => {
+test('ضبط الانتقال، والمساعد متوقف في الاختبار القبلي', async () => {
   assert.equal((await s1.get('/api/activities/1-2')).status, 403);
   const c = await s1.post('/api/activities/1-1/complete');
   assert.equal(c.status, 400);
-  assert.equal(c.data.missing.length, 2);
-  let r = await s1.put('/api/activities/1-1/responses', { values: { topic: 'أ' } });
-  assert.equal(r.data.checks.topic.correct, false);
-  assert.ok(r.data.checks.topic.message.includes('مجال واسع'));
-  r = await s1.put('/api/activities/1-1/responses', { values: { topic: 'ب', goal: 'ب' } });
-  assert.equal(r.data.checks.topic.correct, true);
-  assert.ok(r.data.checks.goal.message.startsWith('إجابة دقيقة'));
-  assert.equal((await s1.post('/api/activities/1-1/complete')).status, 200);
-  assert.equal((await s1.get('/api/activities/1-2')).status, 200);
+  assert.ok(c.data.missing.length >= 1);
+  await doTask(s1, '1-1');
+  const k = await s1.get('/api/activities/1-2');
+  assert.equal(k.status, 200);
+  assert.equal(k.data.chatBlocked, 'independent');
+  assert.equal((await s1.post('/api/activities/1-2/chat', { message: 'ساعديني' })).status, 423);
+  await doTask(s1, '1-2');
+  assert.equal((await s1.get('/api/activities/1-3')).status, 200);
 });
 
 test('الوضع التجريبي يعرض الأسئلة بالتتابع ويُوسم بأنه غير متصل بالنموذج', async () => {
-  await doBook(s2, '1-K1'); await doBook(s2, '1-K3');
-  const r1 = await s2.post('/api/activities/1-1/chat', { message: 'نعم مستعدة' });
+  const r1 = await s2.post('/api/activities/1-1/chat', { message: 'مرحبًا' });
   assert.equal(r1.status, 200);
   assert.equal(r1.data.mode, 'demo');
-  assert.ok(r1.data.reply.includes('ما الصعوبة التي واجهت سارة'));
-  const r2 = await s2.post('/api/activities/1-1/chat', { message: 'لم تحدد موضوعها' });
-  assert.ok(r2.data.reply.includes('لماذا يساعد الموضوع المحدد'));
+  assert.ok(r1.data.reply.includes('أي موضوعات الوحدة الثلاثة'));
+  const r2 = await s2.post('/api/activities/1-1/chat', { message: 'الثاني' });
+  assert.ok(r2.data.reply.includes('أي الأهداف التدريبية'));
 });
 
-test('المطابقة بالقوائم لا تُفحص قبل اكتمالها، ثم تُفحص صفًّا صفًّا', async () => {
-  let r = await s1.put('/api/activities/1-2/responses', { values: { genreMatch: { i1: 'k4', i2: 'k2' } } });
-  assert.equal(r.data.checks.genreMatch, undefined);
-  r = await s1.put('/api/activities/1-2/responses', { values: { genreMatch: { i1: 'k4', i2: 'k1', i3: 'k3', i4: 'k1' } } });
-  assert.deepEqual(r.data.checks.genreMatch.detail, [true, false, true, true]);
-  await s1.put('/api/activities/1-2/responses', { values: { genreMatch: { i1: 'k4', i2: 'k2', i3: 'k3', i4: 'k1' }, goal: 'تشجيع الزميلات على القراءة', audience: 'أ', style: 'نعم' } });
-  assert.equal((await s1.post('/api/activities/1-2/complete')).status, 200);
-  assert.equal((await s1.get('/api/activities/1-3')).status, 403, 'نشاطات الكتاب التمهيدية في مرحلة الاستكشاف أولًا');
-  await doBook(s1, '1-K2');
-  await s1.put('/api/activities/1-3/responses', { values: { relation: 'كل عنصر يحدد ما بعده', better: 'o2', reason: 'أدق' } });
-  assert.equal((await s1.post('/api/activities/1-3/complete')).status, 200);
-  await s1.put('/api/activities/1-4/responses', { values: { domain: 'الحياة المدرسية', topic: 'الرياضة', topicReviewed: 'الرياضة' } });
-  assert.equal((await s1.post('/api/activities/1-4/complete')).status, 200);
-  // جدول بطاقة تدريبية بخلية اختيار
-  r = await s1.put('/api/activities/1-5/responses', { values: { weak: 'الموضوع', newTopic: 'أثر القراءة', newGoal: 'التشجيع', card: { r1: { c1: 'البيئة' }, r2: { c1: 'الهدر' }, r3: { c1: 'التوعية' }, r4: { c1: 'الطالبات' } }, peerGave: 'جيد', peerNeed: 'o2' } });
-  assert.equal((await s1.post('/api/activities/1-5/complete')).status, 400, 'خلية الفن التعبيري فارغة');
-  await s1.put('/api/activities/1-5/responses', { values: { card: { r1: { c1: 'البيئة' }, r2: { c1: 'الهدر' }, r3: { c1: 'التوعية' }, r4: { c1: 'الطالبات' }, r5: { c1: 'المقال' } } } });
-  assert.equal((await s1.post('/api/activities/1-5/complete')).status, 200);
-  await doBook(s1, '1-K4');
-});
-
-test('أزرار المساعد المسماة في الدليل ترسل تعليمتها إلى سياق المساعد دون أن تظهر للطالبة', async () => {
-  const a = await s1.get('/api/activities/1-5');
-  assert.equal(a.status, 200);
-  const r = await s1.post('/api/activities/1-5/chat', { message: '«فحص اختياراتي»', assist: 'a2' });
+test('أزرار المساعد المسماة ترسل تعليمتها إلى سياق المساعد دون أن تظهر للطالبة', async () => {
+  const a = await act(s1, '1-3');
+  assert.equal(a.worksheet.sections[0].assist.label, 'راجعي إجابتي معي');
+  assert.equal(a.worksheet.sections[0].assist.message, '');
+  const r = await s1.post('/api/activities/1-3/chat', { message: '«راجعي إجابتي معي»', assist: 's1' });
   assert.equal(r.status, 200);
-  const chat = (await s1.get('/api/activities/1-5')).data.chat;
-  assert.equal(chat.at(-2).content, '«فحص اختياراتي»');
+  const chat = (await s1.get('/api/activities/1-3')).data.chat;
+  assert.equal(chat.at(-2).content, '«راجعي إجابتي معي»');
+});
+
+test('الجدول بخلايا معطاة من الكتاب: الصف المعطى لا يُطلب، والناقص يمنع الإكمال', async () => {
+  await doTask(s1, '1-3');
+  await doTask(s1, '1-4');
+  await doTask(s1, '1-5');
+  const a = await act(s1, '1-6');
+  const genres = a.worksheet.sections[0].fields.find((f) => f.id === 'genres');
+  assert.ok(genres.given.r1.c1.includes('عنوان (قصير ومثير ودال على المحتوى)'));
+  await s1.put('/api/activities/1-6/responses', { values: { genres: { r2: { c1: 'الشخصيات' }, r3: { c1: 'التحية' } } } });
+  assert.equal((await s1.post('/api/activities/1-6/complete')).status, 400, 'صف التقرير فارغ');
+  await s1.put('/api/activities/1-6/responses', { values: { genres: { r2: { c1: 'الشخصيات' }, r3: { c1: 'التحية' }, r4: { c1: 'النتائج' } } } });
+  assert.equal((await s1.post('/api/activities/1-6/complete')).status, 200);
 });
 
 test('الإنتاج المستقل: منع برمجي للتوليد، وحفظ النسخة الأصلية مع وقت التسليم، وعدم تعديلها', async () => {
-  assert.equal((await s1.post('/api/activities/1-5/chat', { message: 'قبل البدء' })).status, 200, 'المساعد يعمل قبل فتح الإنتاج المستقل');
-  await s1.post('/api/activities/1-6/open');
-  assert.equal((await s1.post('/api/activities/1-6/chat', { message: 'اكتبي لي الموضوع' })).status, 423);
-  assert.equal((await s1.post('/api/activities/1-5/chat', { message: 'اكتبي لي موضوعًا' })).status, 423, 'التوليد معطل في كل مهمات الحصة أثناء الإنتاج المستقل');
-  assert.equal((await s1.get('/api/activities/1-5')).data.chatBlocked, 'independent_lesson');
-  assert.equal((await s1.post('/api/activities/1-6/submit', { values: { domain: 'الرياضة' } })).status, 400);
-  const ok = await s1.post('/api/activities/1-6/submit', { values: { domain: 'الرياضة', topic: 'الرياضة', goal: 'التوعية بفوائد الرياضة', audience: 'الطالبات', genre: 'المقال', reason: 'لأنها مهمة' }, meta: { pasteCount: 1 } });
-  assert.equal(ok.status, 200);
+  assert.equal((await s1.post('/api/activities/1-6/chat', { message: 'قبل البدء' })).status, 200, 'المساعد يعمل قبل فتح الإنتاج المستقل');
+  await s1.post('/api/activities/1-7/open');
+  assert.equal((await s1.post('/api/activities/1-7/chat', { message: 'اكتبي لي' })).status, 423);
+  assert.equal((await s1.post('/api/activities/1-6/chat', { message: 'اكتبي لي' })).status, 423, 'التوليد معطل في كل مهمات الحصة أثناء الإنتاج المستقل');
+  assert.equal((await s1.get('/api/activities/1-6')).data.chatBlocked, 'independent_lesson');
+  assert.equal((await s1.post('/api/activities/1-7/submit', { values: { srcTopics: { r1: { c1: 'أ' } } } })).status, 400);
+  const ok = await doTask(s1, '1-7', { srcTopics: { r1: { c1: 'إحدى التجارب' }, r2: { c1: 'الحاسوب' }, r3: { c1: 'العمران' }, r4: { c1: 'النثر' }, r5: { c1: 'رعاية الفقراء' } } });
   assert.ok(ok.data.meta.submittedAt);
-  assert.equal((await s1.put('/api/activities/1-6/responses', { values: { topic: 'تعديل' } })).status, 409);
-  assert.equal((await s1.post('/api/activities/1-6/submit', { values: {} })).status, 409);
-  assert.equal((await s1.post('/api/activities/1-5/chat', { message: 'بعد التسليم' })).status, 200, 'يعود المساعد بعد التسليم');
+  assert.equal((await s1.put('/api/activities/1-7/responses', { values: { srcTopics: {} } })).status, 409);
+  assert.equal((await s1.post('/api/activities/1-7/submit', { values: {} })).status, 409);
+  assert.equal((await s1.post('/api/activities/1-6/chat', { message: 'بعد التسليم' })).status, 200, 'يعود المساعد بعد التسليم');
 });
 
 test('التقويم والتحسين بمستويين: التقويم الذاتي أولًا، ثم الملاحظات، ثم النسخة المحسنة مع الاحتفاظ بالأصلية', async () => {
-  const ev = (await s1.get('/api/lessons/L01')).data.lesson.activities.find((a) => a.id === '1-7');
-  assert.equal(ev.evaluation.analyzeLabel, 'تحليل بطاقة موضوعي');
-  assert.equal((await s1.post('/api/activities/1-7/feedback')).status, 400, 'لا ملاحظات قبل التقويم الذاتي');
-  assert.equal((await s1.put('/api/activities/1-7/revised', { values: { topic: 'x' } })).status, 400);
-  const ratings = { c1: { level: 'met' }, c2: { level: 'needs', note: 'واسع' }, c3: { level: 'met' }, c4: { level: 'met' } };
-  let r = await s1.put('/api/activities/1-7/self-assessment', { ratings });
+  const ev = await act(s1, '1-8');
+  assert.equal(ev.evaluation.analyzeLabel, 'تحليل موضوعاتي المقترحة');
+  assert.equal(ev.evaluation.sourceActivity, '1-7');
+  assert.equal((await s1.post('/api/activities/1-8/feedback')).status, 400, 'لا ملاحظات قبل التقويم الذاتي');
+  assert.equal((await s1.put('/api/activities/1-8/revised', { values: {} })).status, 400);
+  const ratings = { c1: { level: 'met' }, c2: { level: 'needs', note: 'عامّ' } };
+  let r = await s1.put('/api/activities/1-8/self-assessment', { ratings });
   assert.equal(r.data.complete, false);
-  r = await s1.put('/api/activities/1-7/self-assessment', { ratings: { ...ratings, c5: { level: 'partial' } } });
+  r = await s1.put('/api/activities/1-8/self-assessment', { ratings: { ...ratings, c3: { level: 'partial' } } });
   assert.equal(r.data.complete, false, 'المستوى غير المعتمد يُرفض');
-  r = await s1.put('/api/activities/1-7/self-assessment', { ratings: { ...ratings, c5: { level: 'met' } } });
+  r = await s1.put('/api/activities/1-8/self-assessment', { ratings: { ...ratings, c3: { level: 'met' } } });
   assert.equal(r.data.complete, true);
-  const fb = await s1.post('/api/activities/1-7/feedback');
+  const fb = await s1.post('/api/activities/1-8/feedback');
   assert.equal(fb.status, 503);
   assert.equal(fb.data.kind, 'demo');
-  assert.equal((await s1.post('/api/activities/1-7/complete')).status, 400, 'النسخة المحسنة مطلوبة');
-  r = await s1.put('/api/activities/1-7/revised', { values: { domain: 'الرياضة', topic: 'أثر المشي اليومي في تركيز طالبات الصف الأول الثانوي', goal: 'التوعية', audience: 'طالبات الصف الأول الثانوي', genre: 'المقال', reason: 'متسق' } });
+  assert.equal((await s1.post('/api/activities/1-8/complete')).status, 400, 'النسخة المحسنة مطلوبة');
+  r = await s1.put('/api/activities/1-8/revised', { values: { srcTopics: { r1: { c1: 'تجربة تفاعل كيميائي في مختبر المدرسة' }, r2: { c1: 'الحاسوب' }, r3: { c1: 'العمران' }, r4: { c1: 'النثر' }, r5: { c1: 'رعاية الفقراء' } } } });
   assert.equal(r.status, 200);
-  assert.equal((await s1.post('/api/activities/1-7/complete')).status, 200);
+  assert.equal((await s1.post('/api/activities/1-8/complete')).status, 200);
   // النشاط المنزلي بعد المراحل السبع
-  const hw = await s1.get('/api/activities/1-H');
-  assert.equal(hw.status, 200);
+  assert.equal((await s1.get('/api/activities/1-H')).status, 200);
   assert.equal((await s1.post('/api/activities/1-H/complete')).status, 400);
-  await s1.put('/api/activities/1-H/responses', { values: { hwDomain: 'البيئة', hwTopic: 'هدر الطعام', hwGoal: 'التوعية', hwAudience: 'الطالبات', choice: 'o1', choiceReason: 'أقرب إليّ' } });
-  assert.equal((await s1.post('/api/activities/1-H/complete')).status, 200);
+  await doTask(s1, '1-H');
   const p = await s1.get('/api/portfolio');
   const l1 = p.data.lessons.find((l) => l.id === 'L01');
   assert.equal(l1.completed, true);
-  assert.equal(l1.product.initial.topic, 'الرياضة');
-  assert.ok(l1.product.revised.topic.startsWith('أثر المشي'));
+  assert.equal(JSON.parse(l1.product.initial.srcTopics).r1.c1, 'إحدى التجارب');
+  assert.ok(JSON.parse(l1.product.revised.srcTopics).r1.c1.startsWith('تجربة تفاعل'));
   assert.ok(p.data.skills.find((s) => s.id === 1));
   assert.ok(!JSON.stringify(p.data).includes('chatCount'));
   assert.ok(String((await s1.get('/api/portfolio/export')).data).includes('ملف إنجازي الكتابي'));
 });
 
 test('عزل البيانات: الطالبة لا ترى أعمال زميلتها إلا ما اعتمدته المعلمة', async () => {
-  const sh = await s1.post('/api/activities/1-5/share', {});
+  await teacher.patch('/api/teacher/lessons/L02', { enabled: true, reviewed: true });
+  for (const id of ['2-1', '2-2', '2-3']) await doTask(s1, id);
+  await s1.put('/api/activities/2-4/responses', { values: values(await act(s1, '2-4'), { peerPrefsShow: 'المقال أولًا ثم القصة' }) });
+  const sh = await s1.post('/api/activities/2-4/share', {});
   assert.equal(sh.status, 200);
-  let g = await s2.get('/api/activities/1-1/gallery');
-  assert.equal(g.data.items.length, 0);
   const shares = await teacher.get('/api/teacher/shares');
   const share = shares.data.shares[0];
-  assert.ok(JSON.stringify(share.content).includes('الفن التعبيري المناسب: اختياري=المقال'), 'الجدول يُشارك نصًّا مقروءًا');
+  assert.ok(JSON.stringify(share.content).includes('المقال أولًا ثم القصة'));
+  assert.ok(JSON.stringify(share.content).includes('عدد الزميلات اللاتي يفضلنه'), 'الجدول يُشارك نصًّا مقروءًا');
+  const st2 = (await teacher.get('/api/teacher/overview')).data.students.find((s) => s.code === codes[1].code);
+  await teacher.post(`/api/teacher/students/${st2.id}/unlock`, { activityId: '2-4' });
+  let g = await s2.get('/api/activities/2-4/gallery');
+  assert.equal(g.data.items.length, 0, 'لا يظهر قبل الاعتماد');
   await teacher.patch(`/api/teacher/shares/${share.id}`, { status: 'approved', scope: 'class' });
-  await teacher.post(`/api/teacher/students/${(await teacher.get('/api/teacher/overview')).data.students.find((s) => s.code === codes[1].code).id}/unlock`, { activityId: '1-5' });
-  g = await s2.get('/api/activities/1-5/gallery');
+  g = await s2.get('/api/activities/2-4/gallery');
   assert.equal(g.data.items.length, 1);
   assert.ok(g.data.items[0].author.startsWith('زميلة'));
-  await s2.post(`/api/shares/${share.id}/comments`, { text: 'أعجبني اختياركِ' });
-  g = await s1.get('/api/activities/1-5/gallery');
+  await s2.post(`/api/shares/${share.id}/comments`, { text: 'أعجبتني نتائجكِ' });
+  g = await s1.get('/api/activities/2-4/gallery');
   assert.equal(g.data.items[0].comments.length, 0);
 });
 
@@ -305,40 +296,39 @@ test('المعلمة تعدّل تعليمات المساعد والمعايير
   await teacher.req('DELETE', '/api/teacher/lessons/L01/rubric');
 });
 
-test('ربط النموذج عبر الخادم: التعليمات تُبنى من نص الدليل وبيانات المهمة، والمفتاح لا يصل إلى المتصفح', async () => {
+test('ربط النموذج عبر الخادم: التعليمات تُبنى من نص الكتاب وبيانات المهمة، والمفتاح لا يصل إلى المتصفح', async () => {
   mockMode = 'chat';
   const set = await teacher.put('/api/teacher/settings', { ai: { provider: 'openai', baseUrl: `http://localhost:${mockPort}/v1`, model: 'mock-model', apiKey: 'sk-secret-key-1234', enabled: true } });
   assert.equal(set.data.ai.keyConfigured, true);
   assert.ok(!JSON.stringify(set.data).includes('sk-secret'));
   assert.equal(set.data.ai.keyHint, '…1234');
-  const r = await s2.post('/api/activities/1-1/chat', { message: 'أظن أن سارة لم تحدد موضوعها' });
+  const r = await s2.post('/api/activities/1-1/chat', { message: 'أريد أن أتعلم كتابة المقال' });
   assert.equal(r.status, 200);
   assert.equal(r.data.mode, 'ai');
   const sys = lastMockRequest.messages[0].content;
   assert.ok(sys.includes('رفيقة التحفيز'));
   assert.ok(sys.includes('التحفيز الذكي'));
-  assert.ok(sys.includes('المهمة (1\u200F-\u200F1): قبل أن أكتب، ماذا أختار؟'));
-  assert.ok(sys.includes('نشاط (1): ساعدي سارة على اتخاذ القرار'));
-  assert.ok(sys.includes('لاحظت سارة أن بعض الطالبات يشتكين من قلة تنوع الأصناف'));
-  assert.ok(sys.includes('خاطبي الطالبة بصيغة المؤنث'));
+  assert.ok(sys.includes('(1‏-‏1): دليل الوحدة'));
+  assert.ok(sys.includes('تتبعي الخطوات المناسبة عند كتابة موضوع أو بحث.'), 'نص الكتاب في سياق المساعد');
+  assert.ok(sys.includes('خاطبيها بصيغة المؤنث'));
   assert.ok(sys.includes('تحديد موضوع الكتابة ومجاله تحديدًا دقيقًا.'));
   assert.ok(sys.includes('الكفاءة: الثقة بالقدرة على تعلم مهارات الكتابة وفهمها.'));
-  assert.equal(lastMockRequest.messages.at(-1).content, 'أظن أن سارة لم تحدد موضوعها');
+  assert.equal(lastMockRequest.messages.at(-1).content, 'أريد أن أتعلم كتابة المقال');
   // زر مسمى: تعليمته في السياق
-  await s1.post('/api/activities/1-4/chat', { message: '«ساعديني على فحص موضوعي»', assist: 'a2' });
-  assert.ok(lastMockRequest.messages[0].content.includes('ضغطت الطالبة زر «ساعديني على فحص موضوعي»'));
+  await s1.post('/api/activities/1-3/chat', { message: '«راجعي إجابتي معي»', assist: 's1' });
+  assert.ok(lastMockRequest.messages[0].content.includes('ضغطت الطالبة زر «راجعي إجابتي معي»'));
   assert.ok(!JSON.stringify(await s2.get('/api/me')).includes('sk-secret'));
 });
 
 test('التغذية الراجعة الذكية تُحلَّل وفق المعايير وتُحفظ، والمعلمة تراجعها', async () => {
   mockMode = 'feedback';
-  const fb = await s1.post('/api/activities/1-7/feedback');
+  const fb = await s1.post('/api/activities/1-8/feedback');
   assert.equal(fb.status, 200);
   assert.equal(fb.data.data.criteria[0].id, 'c2');
   assert.ok(lastMockRequest.messages[0].content.includes('لا تقترحي صياغة بديلة'));
   assert.ok(lastMockRequest.messages[1].content.includes('تقويمها الذاتي'));
   assert.ok(lastMockRequest.messages[1].content.includes('يحتاج إلى تحسين'));
-  const a = await s1.get('/api/activities/1-7');
+  const a = await s1.get('/api/activities/1-8');
   assert.equal(a.data.evaluation.feedback.length, 1);
 });
 
@@ -383,61 +373,46 @@ test('حذف بيانات طالبة يزيل كل سجلاتها', async () => 
   assert.ok(!JSON.stringify(json.data).includes(codes[1].code));
 });
 
-test('الحصة الثانية: البناء على منتج الحصة الأولى، والتصنيف والاختيار المتعدد، وبنك المعلومات جدولًا، والاعتماد', async () => {
-  await teacher.patch('/api/teacher/lessons/L02', { enabled: true, reviewed: true });
+test('الحصة الثانية: المطابقة والترتيب يُفحصان آليًّا، والإنتاج المستقل جدولًا، والاعتماد', async () => {
   const pr = await s1.get('/api/products');
-  const p1 = pr.data.products.find((p) => p.lessonId === 'L01');
-  assert.equal(p1.version, 'revised');
-  assert.ok(p1.data.topic.startsWith('أثر المشي'));
-  await s1.put('/api/activities/2-1/responses', { values: { step: 'ب', info: 'آراء الطالبات' } });
-  assert.equal((await s1.post('/api/activities/2-1/complete')).status, 200);
-  let r = await s1.put('/api/activities/2-2/responses', { values: { related: { i1: 'k1', i2: 'k2', i3: 'k1' } } });
-  assert.equal(r.data.checks.related, undefined, 'لا فحص قبل اكتمال التصنيف');
-  r = await s1.put('/api/activities/2-2/responses', { values: { related: { i1: 'k1', i2: 'k2', i3: 'k1', i4: 'k2', i5: 'k2', i6: 'k1' } } });
-  assert.deepEqual(r.data.checks.related.detail, [true, true, true, false, true, true]);
-  r = await s1.put('/api/activities/2-2/responses', { values: { details: ['m2', 'm3'], mainIdea: 'o1' } });
-  assert.equal(r.data.checks.details.correct, false);
-  r = await s1.put('/api/activities/2-2/responses', { values: { details: ['m4', 'm2', 'm3', 'zz'] } });
-  assert.equal(r.data.checks.details.correct, true, 'الاختيار المتعدد لا يعتمد على الترتيب، ويتجاهل غير المعتمد');
-  await s1.put('/api/activities/2-2/responses', { values: { sources: { i1: 'k1', i2: 'k2', i3: 'k3', i4: 'k4' }, related: { i1: 'k1', i2: 'k2', i3: 'k1', i4: 'k1', i5: 'k2', i6: 'k1' } } });
-  assert.equal((await s1.post('/api/activities/2-2/complete')).status, 200);
-  await s1.put('/api/activities/2-3/responses', { values: { relation: '..', difference: '..' } });
-  assert.equal((await s1.post('/api/activities/2-3/complete')).status, 200);
-  const row = (a, b, c) => ({ c1: a, c2: b, c3: c });
-  await s1.put('/api/activities/2-4/responses', { values: { ideas: ['التركيز', 'النشاط', 'المزاج'], plan: { r1: row('التركيز', 'مدة الانتباه', 'ملاحظة'), r2: row('النشاط', 'الحيوية', 'استبانة') } } });
-  assert.equal((await s1.post('/api/activities/2-4/complete')).status, 200);
-  await s1.put('/api/activities/2-5/responses', { values: { picked: ['m1', 'm2', 'm4'], usable: ['m1', 'm2', 'm3'], whyVerify: 'الدقة', peerIdea: 'التركيز', peerInfo: 'دراسة', peerVerify: 'o2', peerGave: 'مثال', organized: { r1: row('أ', 'ب', 'ج'), r2: row('أ', 'ب', 'ج'), r3: row('أ', 'ب', 'ج') } } });
-  assert.equal((await s1.post('/api/activities/2-5/complete')).status, 200);
-  await doBook(s1, '2-K1');
-  const bank = { r1: { c1: 'التركيز', c2: 'انتباه أطول', c3: 'هدوء', c4: 'ملاحظة' }, r2: { c1: 'النشاط', c2: 'حيوية', c3: 'نوم', c4: 'تحتاج تحقق' } };
-  assert.equal((await s1.post('/api/activities/2-6/submit', { values: { bank, importance: 'مهمة' } })).status, 400, 'الفكرة الثالثة ناقصة');
-  bank.r3 = { c1: 'المزاج', c2: 'هدوء', c3: 'رضا', c4: 'كتاب' };
-  assert.equal((await s1.post('/api/activities/2-6/submit', { values: { bank, importance: 'مهمة' } })).status, 200);
+  assert.equal(pr.data.products.find((p) => p.lessonId === 'L01').version, 'revised');
+  // 2-2: المطابقة لا تُفحص قبل اكتمالها، ثم صفًّا صفًّا؛ والترتيب موضعًا موضعًا (أُكملت قبل اختبار المشاركة، والفحص يعمل بعد الإكمال أيضًا)
+  let r = await s1.put('/api/activities/2-2/responses', { values: { stepMatch: { i1: 'k6', i2: 'k3' } } });
+  assert.equal(r.data.checks.stepMatch, undefined);
+  r = await s1.put('/api/activities/2-2/responses', { values: { stepMatch: { i1: 'k6', i2: 'k3', i3: 'k7', i4: 'k2', i5: 'k5', i6: 'k1', i7: 'k1' } } });
+  assert.deepEqual(r.data.checks.stepMatch.detail, [true, true, true, true, true, true, false]);
+  r = await s1.put('/api/activities/2-2/responses', { values: { stepOrder: ['s4', 's6', 's2', 's5', 's7', 's1', 's3'] } });
+  assert.equal(r.data.checks.stepOrder.correct, true);
+  await doTask(s1, '2-4');
+  await doTask(s1, '2-5');
+  const goals = { r1: { c1: 'إطلاع الوزير على سير العمل' }, r2: { c1: 'السلام' } };
+  assert.equal((await s1.post('/api/activities/2-6/submit', { values: { goals } })).status, 400, 'أهداف ناقصة');
+  await doTask(s1, '2-6', { goals: { ...goals, r3: { c1: 'التحذير' }, r4: { c1: 'التوعية' }, r5: { c1: 'التبيين' } } });
   const p2 = (await s1.get('/api/products')).data.products.find((p) => p.lessonId === 'L02');
   assert.equal(p2.version, 'initial');
-  assert.equal(JSON.parse(p2.data.bank).r1.c2, 'انتباه أطول');
+  assert.equal(JSON.parse(p2.data.goals).r1.c1, 'إطلاع الوزير على سير العمل');
   const csv = String((await teacher.get('/api/teacher/export.csv')).data);
-  assert.ok(csv.includes('المعلومة أو التفصيل الأول: انتباه أطول'), 'الجدول يُصدَّر نصًّا مقروءًا');
+  assert.ok(csv.includes('إطلاع الوزير على سير العمل'), 'الجدول يُصدَّر نصًّا مقروءًا');
   const st = (await teacher.get('/api/teacher/overview')).data.students.find((s) => s.code === codes[0].code);
   assert.equal((await teacher.post(`/api/teacher/students/${st.id}/approve`, { lessonId: 'L02' })).status, 200);
   assert.ok((await s1.get('/api/products')).data.products.find((p) => p.lessonId === 'L02').approvedAt);
   const html = String((await s1.get('/api/portfolio/export')).data);
-  assert.ok(html.includes('انتباه أطول') && !html.includes('{&quot;'));
+  assert.ok(html.includes('إطلاع الوزير على سير العمل') && !html.includes('{&quot;'));
 });
 
-test('أداة المخطط: تُحفظ نصًّا منظمًا وتُتحقق من اكتمالها', async () => {
-  for (const id of ['L03', 'L04', 'L05']) await teacher.patch(`/api/teacher/lessons/${id}`, { enabled: true, reviewed: true });
+test('أداة المخطط: شجرة الذاكرة تُحفظ نصًّا منظمًا وتُتحقق من اكتمالها', async () => {
+  for (const id of ['L03', 'L04']) await teacher.patch(`/api/teacher/lessons/${id}`, { enabled: true, reviewed: true });
   const st = (await teacher.get('/api/teacher/overview')).data.students.find((s) => s.code === codes[0].code);
-  await teacher.post(`/api/teacher/students/${st.id}/unlock`, { activityId: '5-6' });
-  const plan = { mode: 'tree', topic: 'أثر المشي', ideas: [{ element: 'المقدمة', idea: 'التركيز', details: ['انتباه'], method: '' }, { element: 'العرض', idea: 'النشاط', details: [] }] };
-  assert.equal((await s1.post('/api/activities/5-6/submit', { values: { plan: JSON.stringify(plan), why: 'مناسب' } })).status, 400, 'فكرتان فقط والثانية بلا تفصيل');
-  plan.ideas[1].details = ['حيوية']; plan.ideas.push({ element: 'الخاتمة', idea: 'المزاج', details: ['هدوء'] });
+  await teacher.post(`/api/teacher/students/${st.id}/unlock`, { activityId: '4-6' });
+  const plan = { mode: 'tree', topic: 'اهتمام الملك سلمان بالحرمين', ideas: [{ element: '', idea: 'التوسعة', details: ['المسجد الحرام'], method: '' }, { element: '', idea: 'العناية بالحجاج', details: [] }] };
+  assert.equal((await s1.post('/api/activities/4-6/submit', { values: { treeHaram: JSON.stringify(plan) } })).status, 400, 'فكرتان فقط');
+  plan.ideas.push({ element: '', idea: 'النظافة', details: [] }, { element: '', idea: 'الإضاءة', details: [] });
   plan.mode = 'nonsense';
-  assert.equal((await s1.post('/api/activities/5-6/submit', { values: { plan: JSON.stringify(plan), why: 'مناسب' } })).status, 400, 'شكل التخطيط مطلوب');
-  plan.mode = 'fishbone';
-  assert.equal((await s1.post('/api/activities/5-6/submit', { values: { plan: JSON.stringify(plan), why: 'مناسب' } })).status, 200);
-  const p5 = (await s1.get('/api/products')).data.products.find((p) => p.lessonId === 'L05');
-  assert.equal(JSON.parse(p5.data.plan).mode, 'fishbone');
+  assert.equal((await s1.post('/api/activities/4-6/submit', { values: { treeHaram: JSON.stringify(plan) } })).status, 400, 'شكل التخطيط مطلوب');
+  plan.mode = 'tree';
+  assert.equal((await s1.post('/api/activities/4-6/submit', { values: { treeHaram: JSON.stringify(plan) } })).status, 200);
+  const p4 = (await s1.get('/api/products')).data.products.find((p) => p.lessonId === 'L04');
+  assert.equal(JSON.parse(p4.data.treeHaram).mode, 'tree');
 });
 
 test('الأسماء: تضيفها المعلمة، وتراها الطالبة نفسها فقط، ولا تصل إلى النموذج ولا إلى التصدير إلا باختيار', async () => {
@@ -478,7 +453,7 @@ test('سلالم التقدير: بنود من المهارات المعتمدة
   r = await teacher.put(`/api/teacher/students/${sid}/ratings`, { activityId: '1-1', values: { [c2.id]: null, [c1.id]: 9 } });
   assert.deepEqual(r.data.values, { [c1.id]: 4 }); // مستوى غير موجود يُرفض، وnull يمحو
   // الإنتاج المستقل يستخدم معايير الحصة
-  const ind = await teacher.get('/api/teacher/ratings/1-6');
+  const ind = await teacher.get('/api/teacher/ratings/1-7');
   assert.ok(ind.data.criteria[0].id.startsWith('r-'));
   // تعديل البنود ثم الاستعادة
   await teacher.put('/api/teacher/activities/1-1/scale', { criteria: [{ id: c1.id, text: 'بند معدّل' }, { text: 'بند جديد' }] });
@@ -512,7 +487,7 @@ test('التصفير: يتطلب كلمة المرور والتأكيد، ويُ
   const o = await teacher.get('/api/teacher/overview');
   assert.equal(o.data.students.length, before);
   assert.ok(o.data.students.every((s) => Object.values(s.progress.L01).every((x) => x !== 'completed')));
-  assert.equal((await s1.get('/api/activities/1-K1')).status, 200); // الطالبة ما زالت تستطيع الدخول
+  assert.equal((await s1.get('/api/activities/1-1')).status, 200); // الطالبة ما زالت تستطيع الدخول
   assert.equal(String((await teacher.get('/api/teacher/export-ratings.csv')).data).split('\r\n').length, 1);
   assert.equal((await teacher.post('/api/teacher/reset', { mode: 'all', password: 'test-pass-123', confirm: 'تصفير' })).status, 200);
   assert.equal((await teacher.get('/api/teacher/overview')).data.students.length, 0);
@@ -528,7 +503,7 @@ test('التقارير: صورة الصف وتقرير الطالبة من تق�
   const [a, b] = made.map((m) => ov.find((s) => s.code === m.code).id);
   const st = new Client();
   await st.post('/api/auth/student', { code: made[0].code });
-  await st.post('/api/activities/1-K1/open'); // تفتح النشاط
+  await st.post('/api/activities/1-1/open'); // تفتح النشاط
   const crit = (await teacher.get('/api/teacher/ratings/1-1')).data.criteria;
   await teacher.put(`/api/teacher/students/${a}/ratings`, { activityId: '1-1', values: { [crit[0].id]: 4, [crit[1].id]: 4 } });
   await teacher.put(`/api/teacher/students/${b}/ratings`, { activityId: '1-1', values: { [crit[0].id]: 2, [crit[1].id]: 1 } });
