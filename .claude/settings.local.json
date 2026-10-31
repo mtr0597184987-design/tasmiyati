@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cp /root/.claude/uploads/a3edeb52-1c14-5987-96df-bb3702b9668b/f8715177-______________.docx /tmp/claude-0/-home-claude-tasmiyati/a3edeb52-1c14-5987-96df-bb3702b9668b/scratchpad/newguide/src/guide.docx)",
+      "Bash(ls -la /tmp/claude-0/-home-claude-tasmiyati/a3edeb52-1c14-5987-96df-bb3702b9668b/scratchpad/newguide/src)",
+      "Bash(which pandoc *)",
+      "Bash(python3 -c \"import docx; print\\('python-docx ok'\\)\")"
+    ]
+  }
+}

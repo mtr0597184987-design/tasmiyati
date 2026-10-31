@@ -310,7 +310,7 @@ test('ربط النموذج عبر الخادم: التعليمات تُبنى �
   assert.ok(sys.includes('التحفيز الذكي'));
   assert.ok(sys.includes('(1‏-‏1): دليل الوحدة'));
   assert.ok(sys.includes('تتبعي الخطوات المناسبة عند كتابة موضوع أو بحث.'), 'نص الكتاب في سياق المساعد');
-  assert.ok(sys.includes('خاطبيها بصيغة المؤنث'));
+  assert.ok(sys.includes('خاطبي الطالبة بصيغة المؤنث'));
   assert.ok(sys.includes('تحديد موضوع الكتابة ومجاله تحديدًا دقيقًا.'));
   assert.ok(sys.includes('الكفاءة: الثقة بالقدرة على تعلم مهارات الكتابة وفهمها.'));
   assert.equal(lastMockRequest.messages.at(-1).content, 'أريد أن أتعلم كتابة المقال');

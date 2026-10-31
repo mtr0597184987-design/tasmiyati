@@ -159,7 +159,7 @@ ${c.style}
 
 ## سياق النشاط الحالي
 - ${lesson.kind === 'book' ? `قسم من كتاب الطالبة خارج الحصص التسع: ${lesson.title}${lesson.courseLesson.title ? ` (الدرس المقرر: ${lesson.courseLesson.title})` : ''}` : `الحصة ${lesson.number}: ${lesson.title} (الدرس المقرر: ${lesson.courseLesson.title})`}.
-- ${a.homework ? 'النشاط المنزلي' : 'المهمة'} (${a.id.replace('-', '\u200F-\u200F')}): ${a.title}${a.book && !(a.book as any).supportive ? ` — من كتاب الطالبة (الدرس: ${a.book.part}، ص ${a.book.pages})` : ''}.
+- ${a.homework ? 'النشاط المنزلي' : 'المهمة'} (${a.id.replace('-', '\u200F-\u200F')}): ${a.title}${a.book && !(a.book as any).supportive ? ` — من الدرس المقرر: ${a.book.part}` : ''}.
 - خطوة الاستراتيجية: ${a.homework ? 'نشاط منزلي بعد الخطوات السبع' : `${stage.id}. ${stage.name} — وظيفتها: ${stage.assistantFunction}`}
 ${a.minutes ? `- زمن المهمة: ${a.minutes} دقائق.\n` : ''}${a.goal ? `- هدف النشاط: ${a.goal}` : ''}
 - المهارات المستهدفة: ${a.skills.map((s) => `(${s}) ${skillText(s)}`).join(' ')}

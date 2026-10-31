@@ -29,7 +29,7 @@ function SectionCard({ s }: { s: BookSection }) {
     <section className={`card book-section ${s.enabled ? '' : 'disabled'}`}>
       <div className="row between" style={{ alignItems: 'flex-start' }}>
         <div>
-          <div className="eyebrow-book"><Icon name="book" size={15} /> من كتاب الطالبة · ص {s.bookPages}</div>
+          <div className="eyebrow-book"><Icon name="book" size={15} /> الوحدة التدريبية الرابعة «مهارات الكتابة»</div>
           <h3 style={{ margin: '2px 0 4px' }}>{s.title}</h3>
           {s.overview && <p className="small muted" style={{ margin: 0 }}>{s.overview}</p>}
         </div>
@@ -40,7 +40,7 @@ function SectionCard({ s }: { s: BookSection }) {
           {s.activities.map((a) => (
             <a key={a.id} className={`book-link ${a.status === 'completed' ? 'done' : ''}`} href={href(`lesson/${s.id}/${a.id}`)}>
               {a.status === 'completed' ? <Icon name="check" size={15} /> : a.test ? <Icon name="edit" size={15} /> : <Icon name="book" size={15} />}
-              <span>{a.title}</span><span className="tiny muted">ص {a.pages}</span>
+              <span>{a.title}</span>
             </a>
           ))}
         </div>

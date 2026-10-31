@@ -189,7 +189,7 @@ export function ActivityView({ lesson, activity: a, catalog, status, preview, po
     <div className="pane-work">
       <div className="card">
         <header className="activity-header" style={{ ['--c' as any]: color }}>
-          <div className="eyebrow">{a.homework ? <>النشاط المنزلي{lesson.homeworkTitle ? `: ${lesson.homeworkTitle}` : ''}{a.book && !(a.book as any).supportive ? ` · من كتاب الطالبة ص ${a.book.pages}` : ''}</> : <>المرحلة {ORD[stage.id]}: {stage.name} · المهمة ({taskNo(a.id)}){a.book ? ` · كتاب الطالبة ص ${a.book.pages}` : ''}{a.minutes ? ` · ${a.minutes} ${a.minutes > 10 ? 'دقيقة' : 'دقائق'}` : ''}</>}</div>
+          <div className="eyebrow">{a.homework ? <>النشاط المنزلي{lesson.homeworkTitle ? `: ${lesson.homeworkTitle}` : ''}</> : <>المرحلة {ORD[stage.id]}: {stage.name} · المهمة ({taskNo(a.id)}){a.minutes ? ` · ${a.minutes} ${a.minutes > 10 ? 'دقيقة' : 'دقائق'}` : ''}</>}</div>
           <h2>{a.title}</h2>
           {a.goal && <div className="goal"><b>هدف المهمة: </b>{a.goal}</div>}
           <div className="skill-pills">
@@ -241,7 +241,7 @@ export function ActivityView({ lesson, activity: a, catalog, status, preview, po
                 <Alert kind="info" icon="pen">هذه مساحة الإنتاج المستقل: اكتبي بنفسكِ، فالمساعد الذكي وأدوات توليد النصوص معطلة. تُحفظ مسودتكِ تلقائيًا، ولا يُعتمد إنتاجكِ إلا عند الضغط على «{submitLabel}».</Alert>
               )}
               <div className="row between" style={{ marginTop: 14 }}>
-                <h3 style={{ margin: 0 }}><Icon name="edit" size={18} style={{ verticalAlign: -3 }} /> {a.independent ? 'إنتاجي المستقل' : a.book ? (a.book.test ? 'أسئلة الاختبار' : 'أنشطة الكتاب') : a.homework ? 'النشاط المنزلي' : 'أنشطة المهمة'}</h3>
+                <h3 style={{ margin: 0 }}><Icon name="edit" size={18} style={{ verticalAlign: -3 }} /> {a.independent ? 'إنتاجي المستقل' : a.book?.test ? 'أسئلة الاختبار' : a.homework ? 'النشاط المنزلي' : 'أنشطة المهمة'}</h3>
                 {hasPrefill && !preview && <button className="btn sm" onClick={applyPrefill} disabled={!products}><Icon name="folder" size={16} /> استرجاع من منتجاتي السابقة</button>}
               </div>
               <Worksheet {...wsProps} sections={a.worksheet.sections}
