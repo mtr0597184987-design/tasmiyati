@@ -53,7 +53,7 @@ function PortfolioBody({ d, teacherView }: { d: any; teacherView?: boolean }) {
 
       {d.journey?.some((j: any) => j.data) && (
         <section className="card">
-          <div className="card-title"><Icon name="map" /> رحلة موضوعي: من التخطيط إلى النسخة النهائية</div>
+          <div className="card-title"><Icon name="map" /> منتجاتي الكتابية في الحصص التسع</div>
           <ol className="journey">
             {d.journey.map((j: any) => (
               <li key={j.lessonId} className={j.data ? 'done' : ''}>
