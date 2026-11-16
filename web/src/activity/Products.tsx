@@ -22,7 +22,22 @@ export function ProductValue({ type, value, field }: { type: string; value: stri
     const v = parseTable(value);
     return <DisplayTable rows={[[field.rowHeader ?? '', ...(field.columns ?? []).map((c: any) => c.label)], ...field.rows.map((r: any) => [r.label, ...(field.columns ?? []).map((c: any) => v?.[r.id]?.[c.id] || '—')])]} />;
   }
-  return <div className="prod-val">{value || '—'}</div>;
+  if (type === 'list' || type === 'multi') {
+    let arr: any = value;
+    if (typeof arr === 'string') { try { arr = JSON.parse(arr); } catch { arr = arr ? arr.split('\n') : []; } }
+    if (Array.isArray(arr)) {
+      const lab = (x: any) => optLabel(field, x);
+      const items = arr.map(lab).filter((x: string) => String(x).trim());
+      return items.length ? <ol className="prod-list">{items.map((x: string, i: number) => <li key={i}>{x}</li>)}</ol> : <div className="prod-val">—</div>;
+    }
+  }
+  if ((type === 'select' || type === 'choice') && field?.options) return <div className="prod-val">{optLabel(field, value) || '—'}</div>;
+  return <div className="prod-val">{typeof value === 'string' ? value || '—' : JSON.stringify(value)}</div>;
+}
+
+function optLabel(field: any, v: any): string {
+  const o = (field?.options ?? []).find((x: any) => (typeof x === 'string' ? x : x.id) === v);
+  return o == null ? String(v ?? '') : typeof o === 'string' ? o : o.label ?? o.text ?? o.id;
 }
 
 export function ProductsPanel({ ids, products }: { ids: string[]; products: Product[] | null }) {
